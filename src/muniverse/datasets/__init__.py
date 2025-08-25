@@ -79,3 +79,22 @@ def generate_recording(config):
 
     # TODO: Handle neuromotion vs hybrid 
     generate_neuromotion_recording(input_config, output_dir, engine, container, cache_dir)
+
+def load_datasets():
+    """
+    Load BIDS-formatted datasets available through MUniverse
+
+    Available datasets include:
+    1. Avrillon et. al. 2023
+    2. Caillet et. al. 2024
+    3. Grison et. al. 2025
+    4. MUniverse Neuromotion-Train set
+    5. MUinverse Neuromotion-Test set
+    6. MUniverse Hybrid-Tibialis set
+
+    # TODO: Import from harvard dataverse
+
+    """
+    pass
+
+# def dataset_prepare() --> Convert into easy to use formatss
