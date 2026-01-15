@@ -6,6 +6,7 @@ import json
 import os
 import time
 import numpy as np
+from easyDataverse import Dataverse
 
 from ..utils.containers import pull_container, verify_container_engine
 from ..utils.logging import SimulationLogger
@@ -195,19 +196,23 @@ def generate_hybrid_recording(
     return results
 
 
-def load_datasets():
+def load_datasets(dset_name, filedir="./data/", n_parallel_downloads=1):
     """
     Load BIDS-formatted datasets available through MUniverse
 
     Available datasets include:
-    1. Avrillon et. al. 2023
-    2. Caillet et. al. 2024
-    3. Grison et. al. 2025
-    4. MUniverse Neuromotion-Train set
-    5. MUinverse Neuromotion-Test set
-    6. MUniverse Hybrid-Tibialis set
-
-    # TODO: Import from harvard dataverse
+    - Caillet et. al. 2023: "doi:10.7910/DVN/F9GWIW"
+    - Avrillon et. al. 2024: "doi:10.7910/DVN/L9OQY7"
+    - Grison et. al. 2025: "doi:10.7910/DVN/ID1WNQ"
+    - MUniverse Neuromotion-Train set: "doi:10.7910/DVN/2UQHTP"
+    - MUinverse Neuromotion-Test set: "doi:10.7910/DVN/QYI336"
+    - MUniverse Hybrid-Tibialis set: "doi:10.7910/DVN/YHTGGA"
 
     """
-    pass
+    dataverse = Dataverse(server_url="https://dataverse.harvard.edu/")
+    dataset = dataverse.load_dataset(
+        pid=dset_name,
+        filedir=filedir,
+        n_parallel_downloads=n_parallel_downloads,
+    )
+    return dataset
