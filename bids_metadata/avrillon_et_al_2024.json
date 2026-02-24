@@ -1,7 +1,7 @@
 {   
     "DatasetDescription": {
         "Name": "MUniverse Avrillon et al 2024",
-        "BIDSversion": "1.10.2",
+        "BIDSVersion": "1.11.0",
         "DatasetType": "raw",
         "License": "CC0 BY 4.0",
         "Authors": [
@@ -11,7 +11,10 @@
             "Arnault H. Caillet",
             "Dario Farina"
         ],
-        "EthicsApprovals": "The study was reviewed and approved by Imperial College London (Study 18IC4685) and Comité de Protection des Personnes Ouest III (Study 23.00453.000166)",
+        "EthicsApprovals": [
+            "Imperial College London (Study 18IC4685)",
+            "Comité de Protection des Personnes Ouest III (Study 23.00453.000166)"
+        ],
         "Funding": [
             "Agence Nationale de la Recherche (ANR-16-IDEX-0007)",
             "Biotechnology and Biological Sciences Research Council (BB/V00896X)",

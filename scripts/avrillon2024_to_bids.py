@@ -33,7 +33,7 @@ def get_grid_coordinates(grid_name):
     return(x,y)
 
 # Helper function for making channel metadata
-def make_channel_metadata(fsamp = 2048, muscle = 'Tibialis Anterior', IED = '4 mm', grid_name = 'GR04MM1305'):
+def make_channel_metadata(fsamp = 2048, muscle = 'Tibialis Anterior', IED = 4, grid_name = 'GR04MM1305'):
     columns = ['name', 'type', 'unit', 'description', 'sampling_frequency', 
                 'signal_electrode', 'reference_electrode', 'group', 'target_muscle',
                 'interelectrode_distance', 'grid_name', 'low_cutoff', 'high_cutoff', 'status']
@@ -44,7 +44,7 @@ def make_channel_metadata(fsamp = 2048, muscle = 'Tibialis Anterior', IED = '4 m
     df = df.astype({"name": "string", "type": "string", "unit": "string",
                     "description": "string", "sampling_frequency": "float",
                     "signal_electrode": "string", "reference_electrode": "string",
-                    "group": "string", "target_muscle": "string", "interelectrode_distance": "string",
+                    "group": "string", "target_muscle": "string", "interelectrode_distance": "float",
                     "grid_name": "string", "low_cutoff": "float", "high_cutoff": "float", "status": "string"})
 
     df.loc[:df.shape[0], 'name'] = ['Ch' + str(i+1).zfill(2) for i in range(64*ngrid + 2)]
@@ -76,12 +76,22 @@ def make_channel_metadata(fsamp = 2048, muscle = 'Tibialis Anterior', IED = '4 m
     
     return df
 
+# TODO Add to electrode.tsv file
+#"ElectrodeManufacturer": "OTBioelettronica",
+#"ElectrodeManufaturerModelName": "GR04MM1305",
+#"ElectrodeMaterial": "gold coated",
+#"InterelectrodeDistance": 4,
+
 # Helper  function for making the electrode metadata
-def make_electrode_metadata(ngrids):
+def make_electrode_metadata(ngrids, gridname='GR04MM1305', ied=4):
     name              = []
     x                 = []
     y                 = []
     coordinate_system = []
+    gridname = []
+    ied_vals = []
+    el_manufacturer = []
+    el_material = []
 
     elecorode_idx = 0
     for i in np.arange(ngrids):
@@ -90,6 +100,10 @@ def make_electrode_metadata(ngrids):
             elecorode_idx += 1
             name.append('E' + str(elecorode_idx))
             coordinate_system.append('Grid1')
+            gridname.append(gridname)
+            ied_vals.append(ied)
+            el_manufacturer.append("OTBioelettronica")
+            el_material.append("gold coated")
             if i==0:
                 x.append(xg[j])
                 y.append(yg[j])
@@ -109,7 +123,8 @@ def make_electrode_metadata(ngrids):
     y.append('n/a') 
     y.append('n/a') 
     coordinate_system.append('n/a') 
-    coordinate_system.append('n/a')        
+    coordinate_system.append('n/a')    
+    # TODO add metadata for these electrodes    
     el_metadata = {'name': name, 'x': x, 'y': y, 'coordinate_system': coordinate_system}
 
     return(el_metadata)
@@ -126,6 +141,8 @@ sourcepath = str(Path.home()) + '/Downloads/avrillon2024/'
 # Subjects 
 sub_id = [1, 2, 3, 4, 5, 6, 7, 8, 
           11, 12, 13, 14, 15, 16, 17, 18]
+
+sub_id = [1]
 
 # Number of subjects
 n_sub = 1 #len(sub_id)
@@ -187,14 +204,10 @@ for i in np.arange(len(sub_id)):
         emg_data = np.zeros((64*ngrids+2,data.shape[1]))
         #emg_data = data
         #emg_data = emg_data[:64*ngrids+2,:]
-        emg_data[:64*ngrids,:] = data[:64*ngrids,:] / 150 # Manually add gain of the emg adapters
-        #emg_data[64*ngrids,:] = emg_data[64*ngrids,:] / 0.5   # Manually add gain of the aux adapter    
+        emg_data[:64*ngrids,:] = data[:64*ngrids,:] / 150 # Divide by the gain to obtain EMG amplitudes in mV
         emg_data[64*ngrids,:] = target
         emg_data[64*ngrids+1,:] = path
         emg_data = emg_data.T
-
-        # Import daata from otb+ file
-        
         
         # Get and write channel metadata
         ch_metadata = make_channel_metadata(muscle=muscle, grid_name=grid, IED=ied)
@@ -213,8 +226,16 @@ for i in np.arange(len(sub_id)):
 
 
         # Make a recording and add data and metadata
-        emg_recording = bids_emg_recording(data_obj=Avrillon_2024,subject=sub_id[i], task=task, datatype='emg')
-        emg_recording.set_metadata(field_name='channels', source=ch_metadata)
+        emg_recording = bids_emg_recording(
+            dataset_config=Avrillon_2024,
+            subject_id=sub_id[i], 
+            task_label=task, 
+            datatype='emg',
+            inherited_metadata=["emg", "channels", "electrodes", "coordsystem"],
+            inherited_level=["dataset", "dataset", "dataset", "dataset"]
+        )
+        
+        #emg_recording.set_metadata(field_name='channels', source=ch_metadata)
         emg_recording.set_metadata(field_name='electrodes', source=el_metadata) 
         emg_recording.set_metadata(field_name='emg_sidecar', source=emg_sidecar)
         emg_recording.set_metadata(field_name='coord_sidecar', source=coordsystem_metadata)
