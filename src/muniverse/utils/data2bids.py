@@ -710,7 +710,7 @@ class bids_emg_recording(bids_dataset):
         self.datasetname = df.loc[idx, "dataset_name"]
 
         self.read()
-        
+
         return ()
 
 class bids_neuromotion_recording(bids_emg_recording):
@@ -721,18 +721,18 @@ class bids_neuromotion_recording(bids_emg_recording):
 
     def __init__(
         self,
-        subject_id=1,
-        subject_desc="sim",
+        subject_label="sim01",
+        session_label=None,
         task_label="isometric",
+        acq_label=None,
+        run_label="01",
+        recording_label=None,
         datatype="emg",
-        session=None,
-        run=1,
         dataset_config=None,
         root="./",
         datasetname="dataset_name",
         fileformat="edf",
         overwrite=False,
-        n_digits=2,
         inherited_metadata=None,
     ):
 
@@ -741,18 +741,18 @@ class bids_neuromotion_recording(bids_emg_recording):
             inherited_metadata = self.INHERITABLE_FILES
 
         super().__init__(
-            subject_id=subject_id,
-            subject_desc=subject_desc,
+            subject_label=subject_label,
+            session_label=session_label,
             task_label=task_label,
+            acq_label=acq_label,
+            run_label=run_label,
+            recording_label=recording_label,
             datatype=datatype,
-            session=session,
-            run=run,
             dataset_config=dataset_config,
             root=root,
             datasetname=datasetname,
             fileformat=fileformat,
             overwrite=overwrite,
-            n_digits=n_digits,
             inherited_metadata=inherited_metadata,
         )
 
@@ -842,38 +842,39 @@ class bids_decomp_derivatives(bids_emg_recording):
         rec_config=None,
         datasetname="dataset_name",
         datatype="emg",
-        subject_id=1,
-        subject_desc = "",
+        subject_label="01",
+        session_label=None,
         task_label="isometric",
-        run=1,
-        session=None,
+        acq_label=None,
+        run_label="01",
+        recording_label=None,
         desc_label="decomposed",
         root="./",
         fileformat="edf",
         overwrite=False,
-        n_digits=2,
     ):
 
         # Check if the function arguments are valid
-        self._validate_arguments(subject_id, session, run, datatype, n_digits)
+        self._validate_arguments(
+            subject_label, session_label, task_label, acq_label, run_label, recording_label, datatype
+        )
 
         # Process name and session input
-        subject_name = f"sub-{subject_desc}{self._id_to_label(subject_id)}"
-        if session is None:
-            datapath = f"{subject_name}/{datatype}/"
+        if session_label is None:
+            datapath = f"sub-{subject_label}/{datatype}/"
         else:
-            session_name = f"ses-{self._id_to_label(session)}" 
-            datapath = f"{subject_name}/{session_name}/{datatype}/"
+            datapath = f"sub-{subject_label}/ses-{session_label}/{datatype}/"
 
         # Store essential information for BIDS compatible folder structure in a dictonary
         self.datapath = datapath
-        self.subject_label = f"{subject_desc}{self._id_to_label(subject_id)}"
-        self.task = "task-" + task_label
-        self.session = session
-        self.desc = "desc-" + desc_label
+        self.subject_label = subject_label
+        self.session_label = session_label
+        self.task_label = task_label
+        self.acq_label = acq_label
+        self.run_label = run_label
+        self.recording_label = recording_label
+        self.desc_label = desc_label
         self.overwrite = overwrite
-        self.n_digits = n_digits
-        self.run = run
         self.datatype = datatype
         self.fileformat = fileformat
 
@@ -919,13 +920,17 @@ class bids_decomp_derivatives(bids_emg_recording):
         if not os.path.exists(self.derivative_datapath):
             os.makedirs(self.derivative_datapath)
 
-        name = self.derivative_datapath + self.subject_name + "_"
-        if self.session is not None:
-            name = name + f"ses-{self._id_to_label(self.session)}_"
-        name = name + self.task + "_"
-        if self.run is not None:
-            name = name + f"run-{self._id_to_label(self.run)}_"
-        name = f"{name}_{self.desc}_"    
+        name = self.derivative_datapath + f"sub-{self.subject_label}_"
+        if self.session_label is not None:
+            name = name + f"ses-{self.session_label}_"
+        name = name + f"task-{self.task_label}_"
+        if self.acq_label is not None:
+            name = name + f"acq-{self.acq_label}_"
+        if self.run_label is not None:
+            name = name + f"run-{self.run_label}_"
+        if self.recording_label is not None:
+            name = name + f"recording-{self.recording_label}_"    
+        name = f"{name}_desc-{self.desc_label}_"    
 
         # write *_predictedspikes.tsv
         self.spikes.to_csv(
@@ -936,7 +941,7 @@ class bids_decomp_derivatives(bids_emg_recording):
         with open(fname, "w") as f:
             json.dump(self.pipeline_sidecar, f)
         # write *_predictedsources.edf file
-        self.source.write(name + self.datatype + ".edf")
+        self.source.write(name + self.datatype + self.fileformat)
         # write dataset.json
         fname = self.root + "/dataset.json"
         if self.overwrite or not os.path.isfile(fname):
@@ -948,14 +953,19 @@ class bids_decomp_derivatives(bids_emg_recording):
         Import data from BIDS dataset
 
         """
-        # read *_predictedspikes.tsv
-        name = self.derivative_datapath + self.subject_name + "_"
-        if self.session > 0:
-            name = name + f"ses-{self._id_to_label(self.session)}_"
-        name = name + self.task + "_"
-        if self.run > 0:
-            name = name + f"run-{self._id_to_label(self.run)}_"
-        name = f"{name}_{self.desc}_"         
+        
+        #
+        name = self.derivative_datapath + f"sub-{self.subject_label}_"
+        if self.session_label is not None:
+            name = name + f"ses-{self.session_label}_"
+        name = name + f"task-{self.task_label}_"
+        if self.acq_label is not None:
+            name = name + f"acq-{self.acq_label}_"
+        if self.run_label is not None:
+            name = name + f"run-{self.run_label}_"
+        if self.recording_label is not None:
+            name = name + f"recording-{self.recording_label}_"    
+        name = f"{name}_desc-{self.desc_label}_"        
 
         # read *_predictedspikes.tsv
         fname = name + "events.tsv"
@@ -967,7 +977,7 @@ class bids_decomp_derivatives(bids_emg_recording):
             with open(fname, "r") as f:
                 self.pipeline_sidecar = json.load(f)
         # read *.edf file
-        fname = name + self.datatype + ".edf"
+        fname = name + self.datatype + self.fileformat
         if os.path.isfile(fname):
             #self.source = read_edf(fname)
             self.source, _, _ = read_edf(fname)
