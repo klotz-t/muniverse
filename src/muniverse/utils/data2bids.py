@@ -135,11 +135,31 @@ class bids_dataset:
         # Update field
         setattr(self, field_name, current)
 
-    def list_all_files(self, extension):
+    def _get_label_from_filename(self, file, key):
+        """
+        Extract a label of some key in a BIDS filename
+
+        Args: 
+            file (str): BIDS filename
+            key (str): key from which the label is extracted (e.g., "sub" or "task")
+
+        Returns: 
+            label (str): label corresponding to the requested BIDS key
+        """    
+
+        filename = Path(file).name
+        label = re.search(fr"{key}-([^-_]+)", filename)
+
+        return label
+        
+
+
+    def list_all_files(self, suffix, extension):
         """
         Summarize all files with a given extension that are part of a BIDS folder
 
         Args:
+            suffix (str): Data type (e.g., emg)
             extension (str): File extension to be filtered (e.g. 'edf' for all *.edf files)
 
         Returns:
@@ -147,42 +167,46 @@ class bids_dataset:
         """
 
         root = Path(self.root)
-        files = list(root.rglob(f"*{extension}"))
+        files = list(root.rglob(f"*{suffix}.{extension}"))
         filenames = [f.name for f in files]
         paths = [f.resolve() for f in files]
-        columns = ["sub", "ses", "task", "run", "data_type", "file_format", "file_path"]
+        columns = [
+            "sub","ses","task","acq","run","recording","suffix","extension","file_path","file_name","dataset_name"
+        ]
         df = pd.DataFrame(np.nan, index=range(len(filenames)), columns=columns)
         df = df.astype(
             {
                 "sub": "string",
                 "ses": "string",
                 "task": "string",
+                "acq": "string",
                 "run": "string",
-                "data_type": "string",
-                "file_format": "string",
+                "recording": "string",
+                "suffix": "string",
+                "extension": "string",
                 "file_path": "string",
+                "file_name": "string",
+                "dataset_name": "string"
             }
         )
 
-        # TODO some checks for testing for valid file names / extensions
-
         for i in np.arange(len(filenames)):
-            splitname = filenames[i].split("_")
+            fname = str(paths[i])
             df.loc[i, "file_path"] = str(paths[i].parent)
             df.loc[i, "file_name"] = str(paths[i])
-            if splitname[1].split("-")[0] == "ses":
-                df.loc[i, "sub"] = splitname[0].split("-")[1]
-                df.loc[i, "ses"] = splitname[1].split("-")[1]
-                df.loc[i, "task"] = splitname[2].split("-")[1]
-                df.loc[i, "run"] = splitname[3].split("-")[1]
-                df.loc[i, "data_type"] = splitname[4].split(".")[0]
-                df.loc[i, "file_format"] = splitname[4].split(".")[1]
-            else:
-                df.loc[i, "sub"] = splitname[0].split("-")[1]
-                df.loc[i, "task"] = splitname[1].split("-")[1]
-                df.loc[i, "run"] = splitname[2].split("-")[1]
-                df.loc[i, "data_type"] = splitname[3].split(".")[0]
-                df.loc[i, "file_format"] = splitname[3].split(".")[1]
+            df.loc[i, "sub"] = self._get_label_from_filename(fname, "sub")
+            label = self._get_label_from_filename(fname, "ses")
+            df.loc[i, "ses"] = label if label else pd.NA
+            df.loc[i, "task"] = self._get_label_from_filename(fname, "task")
+            label = self._get_label_from_filename(fname, "acq")
+            df.loc[i, "acq"] = label if label else pd.NA
+            label = self._get_label_from_filename(fname, "run")
+            df.loc[i, "run"] = label if label else pd.NA
+            label = self._get_label_from_filename(fname, "recording")
+            df.loc[i, "recording"] = label if label else pd.NA
+            df.loc[i, "suffix"] = suffix
+            df.loc[i, "extension"] = extension
+            df.loc[i, "dataset_name"] = self.datasetname
 
         return df
 
@@ -220,26 +244,13 @@ class bids_dataset:
 
         return metadata
     
-    def _id_to_label(self, id):
-        """ 
-        Convert an ID (int) into a label (string)
-
-        """
-
-        if type(id) is not int or id > 10**self.n_digits - 1:
-            raise ValueError("invalid subject ID")
-        else:
-            label = str(id).zfill(self.n_digits)   
-
-        return label
-
     def _get_bids_version(self):
         """
         Get the BIDS version of your dataset
 
         """
 
-        bids_version = "1.11.0"
+        bids_version = "1.11.1"
 
         return bids_version
 
@@ -268,21 +279,21 @@ class bids_emg_recording(bids_dataset):
     INHERITABLE_FILES = ["emg", "channels" ,"electrodes", "coordsystem"]
     INHERITABLE_LEVELS = ["dataset" , "task", "subject", "session"]
     # Define permissible raw data formats
-    FILE_FORMATS = ["edf", "bdf"]
+    FILE_FORMATS = ["edf", "edf+", "bdf", "bdf+"]
 
     def __init__(
         self,
-        subject_id=1,
-        subject_desc="",
-        task_label="isometric",
+        subject_label="01",
+        session_label=None,
+        task_label="taskDescription",
+        acq_label = None,
+        run_label="01",
+        recording_label=None,
         datatype="emg",
-        session=None,
-        run=1,
         root="./",
         datasetname="dataset_name",
-        overwrite=False,
-        n_digits=2,
         fileformat="edf",
+        overwrite=False,
         inherited_metadata=None,
         inherited_level=None,
         dataset_config=None
@@ -300,25 +311,24 @@ class bids_emg_recording(bids_dataset):
             self.subjects_data = dataset_config.subjects_data
 
         # Check if the function arguments are valid
-        self._validate_arguments(subject_id, session, run, datatype, n_digits)
+        self._validate_arguments(
+            subject_label, session_label, task_label,  acq_label, run_label, recording_label, datatype
+        )
 
-        # Process name and session input
-        subject_name = f"sub-{subject_desc}{self._id_to_label(subject_id)}"
-        if session is None:
-            datapath = self.root + "/" + subject_name + "/" + datatype + "/"
+        # Get the datapath
+        if session_label is None:
+            datapath = f"{self.root}/sub-{subject_label}/{datatype}/"
         else:
-            session_name = f"ses-{self._id_to_label(session)}"
-            datapath = (
-                self.root + "/" + subject_name + "/" + session_name + "/" + datatype + "/"
-            )
+            datapath = f"{self.root}/sub-{subject_label}/ses-{session_label}/{datatype}/"
 
         # Store essential information for BIDS compatible folder structure in a dictonary
         self.datapath = datapath
-        self.n_digits = n_digits
-        self.subject_label = f"{subject_desc}{self._id_to_label(subject_id)}"
+        self.subject_label = subject_label
+        self.session_label = session_label
         self.task_label = task_label
-        self.session = session
-        self.run = run
+        self.acq_label = acq_label
+        self.run_label = run_label
+        self.recording_label = recording_label
         self.datatype = datatype
         #self.emg_data = Edf([EdfSignal(np.zeros(1), sampling_frequency=1)])
         self.emg_data = np.empty([1,1])
@@ -405,13 +415,21 @@ class bids_emg_recording(bids_dataset):
             folder = f"{self.root}/sub-{self.subject_label}/" 
 
             if self.session is not None:
-                fname = fname + f"ses-{self._id_to_label(self.session)}_"
-                folder = folder + f"ses-{self._id_to_label(self.session)}/"
+                fname = fname + f"ses-{self.session_label}_"
+                folder = folder + f"ses-{self.session_label}/"
+
+            folder = folder + f"{self.datatype}/"    
 
             fname = fname + f"task-{self.task_label}_"
-            folder = folder + f"{self.datatype}/"
-            if self.run > 0:
-                fname = fname + f"run-{self._id_to_label(self.run)}_"
+
+            if self.acq_label is not None:
+                fname = fname + f"acq-{self.acq_label}_"
+            
+            if self.run_label is not None :
+                fname = fname + f"run-{self.run_label}_"
+
+            if self.recording_label is not None :
+                fname = fname + f"recording-{self.recording_label}_"    
 
         # Inherited metdadata files
         else:
@@ -426,8 +444,8 @@ class bids_emg_recording(bids_dataset):
                 fname = f"sub-{self.subject_label}_"
                 folder = f"{self.root}/sub-{self.subject_label}/"
             elif level == "session":
-                fname = f"sub-{self.subject_label}_ses-{self._id_to_label(self.session)}_"
-                folder = f"{self.root}/sub-{self.subject_label}/ses-{self._id_to_label(self.session)}/"
+                fname = f"sub-{self.subject_label}_ses-{self.session_label}_"
+                folder = f"{self.root}/sub-{self.subject_label}/ses-{self.session_label}/"
            
         if datatype is None:
             pass
@@ -478,40 +496,59 @@ class bids_emg_recording(bids_dataset):
 
         return None
     
-    def _validate_arguments(self, subject_id, session, run, datatype, n_digits):
+    def _validate_arguments(
+            self, 
+            subject_label, 
+            session_label,
+            task_label,
+            acq_label, 
+            run_label, 
+            recording_label,
+            datatype):
         """
         Return error if the selected arguments are invalid
         
         """
 
-        if type(subject_id) is not int or subject_id > 10**n_digits - 1 or subject_id < 0:
-            raise ValueError("invalid subject ID")
+        if type(subject_label) is not str:
+            raise ValueError("subject_label must be of type string")
+        
+        if type(task_label) is not str:
+            raise ValueError("task_label must be of type string")
 
-        if session is not None:
-            if type(session) is not int or session > 10**n_digits - 1 or session < 1:
-                raise ValueError("invalid session ID")
+        if session_label is not None:
+            if type(session_label) is not str:
+                raise ValueError("session_label must be of type string or None")
+            
+        if acq_label is not None:
+            if type(acq_label) is not str:
+                raise ValueError("acq_label must be of type string or None")    
 
-        if run is not None:
-            if type(run) is not int or run > 10**n_digits - 1 or run < 1:
-                raise ValueError("invalid run ID")
+        if run_label is not None:
+            if type(run_label) is not str:
+                raise ValueError("run_label must be of type string or None")
+            
+        if recording_label is not None:
+            if type(recording_label) is not str:
+                raise ValueError("recording_label must be of type string or None")    
 
         if datatype not in ["emg"]:
             raise ValueError("datatype must be emg")
 
     def _init_emg_sidecar(self):
         """
-        Initalize EMG sidecar metadata
+        Initalize the required EMG sidecar metadata
 
         """
 
         metadata = {
-            "EMGPlacementScheme": "Must be one of: ChannelSpecific, Measured or Other",
+            "EMGPlacementScheme": "How electrode positions are determined (ChannelSpecific, Measured or Other)",
             "EMGPlacementSchemeDescription": "Details about EMG sensor placement",
             "EMGReference": "Description of the approach to signal referencing",
             "SamplingFrequency": 2048,
             "PowerLineFrequency": 50,
             "SoftwareFilters": "Object of temporal software filters applied, or n/a if the data is not available",
-            "RecordingType": "Must be one of: continuous, epoched or discontinuous",
+            "RecordingType": "Data continuity (continuous, epoched or discontinuous)",
         }
 
         return metadata
@@ -659,20 +696,22 @@ class bids_emg_recording(bids_dataset):
 
     def read_data_frame(self, df, idx):
         self.subject_label = df.loc[idx, "sub"]
-        #self.subject_id = int(re.search(r"\d+", df.loc[idx, "sub"]).group())
-        #self.task = "task-" + df.loc[idx, "task"]
+        label = df.loc[idx, "ses"]
+        self.session_label = label if label else None
         self.task_label = df.loc[idx, "task"]
-        self.datatype = df.loc[idx, "data_type"]
-        self.run = int(df.loc[idx, "run"])
+        label = df.loc[idx, "acq"]
+        self.acq_label = label if label else None
+        label = df.loc[idx, "run"]
+        self.run_label = label if label else None
+        label = df.loc[idx, "recording"]
+        self.recording_label = label if label else None
+        self.datatype = df.loc[idx, "suffix"]
         self.datapath = df.loc[idx, "file_path"] + "/"
-        if pd.isna(df.loc[0, "ses"]):
-            self.session = None
-        else:
-            self.session = int(
-                df.loc[idx, "ses"]
-            )  # TODO catch if session odes not exist
-        pass
+        self.datasetname = df.loc[idx, "dataset_name"]
 
+        self.read()
+        
+        return ()
 
 class bids_neuromotion_recording(bids_emg_recording):
     """
