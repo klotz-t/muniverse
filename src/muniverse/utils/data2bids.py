@@ -295,7 +295,7 @@ class bids_emg_recording(bids_dataset):
     """
 
     # Define valid metadata files that can be inherited and valid inheritance levels
-    INHERITABLE_FILES = ["emg", "channels" ,"electrodes", "coordsystem"]
+    INHERITABLE_FILES = ["emg", "channels" ,"electrodes", "space"]
     INHERITABLE_LEVELS = ["dataset" , "task", "subject", "session"]
     # Define permissible raw data formats
     FILE_FORMATS = ["edf", "edf+", "bdf", "bdf+"]
@@ -596,9 +596,9 @@ class bids_emg_recording(bids_dataset):
         filename = self._get_bids_filename("electrodes","tsv")
         self.electrodes.to_csv(filename, sep="\t", index=False, header=True, na_rep="n/a")
 
-        filename = self._get_bids_filename("space-", None)
-        for name, metadata in vars(self.coord_sidecar).items():
-            filename2 = f"{filename}{name}_coordsystem.json"
+        filename = self._get_bids_filename("space", None)
+        for name, metadata in self.coord_sidecar.items():
+            filename2 = f"{filename}-{name}_coordsystem.json"
             with open(filename2, "w") as f:
                 json.dump(metadata, f)
 
