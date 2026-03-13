@@ -99,13 +99,14 @@ class bids_dataset:
 
         return ()
 
-    def set_metadata(self, field_name, source):
+    def set_metadata(self, field_name, source, overwrite=False):
         """
         Generic metadata update function.
 
         Parameters:
             field_name (str): name of the metadata attribute to update
             source (dict, DataFrame, or str): data or file path
+            overwrite (bool): If False, the field is updated, otherwise overwritten by source
         """
 
         if field_name == "readme":
@@ -127,6 +128,8 @@ class bids_dataset:
 
         # Update logic based on current type
         if isinstance(current, dict):
+            if overwrite:
+                current = {}
             if isinstance(source, dict):
                 current.update(source)
             elif isinstance(source, pd.DataFrame):
@@ -134,13 +137,17 @@ class bids_dataset:
             else:
                 raise TypeError("Expected dict or DataFrame for dict field")
         elif isinstance(current, pd.DataFrame):
+            if overwrite:
+                frames = [source]
             if isinstance(source, dict):
                 row = pd.DataFrame(data=source)
-                current = pd.concat([current, row], ignore_index=True)
+                frames = [current, row]
             elif isinstance(source, pd.DataFrame):
-                current = pd.concat([current, source], ignore_index=True)
+                frames = [current, source]
             else:
                 raise TypeError("Expected dict or DataFrame for DataFrame field")
+            frames = [d for d in frames if not d.empty]
+            current = pd.concat(frames, ignore_index=True)
         else:
             raise TypeError(f"Unsupported target type for '{field_name}'")
 
@@ -308,7 +315,7 @@ class bids_emg_recording(bids_dataset):
     """
 
     # Define valid metadata files that can be inherited and valid inheritance levels
-    INHERITABLE_FILES = ["emg", "channels" ,"electrodes", "space", "events"]
+    INHERITABLE_FILES = ["electrodes", "space", "events"]
     INHERITABLE_LEVELS = ["dataset" , "task", "subject", "session"]
     # Define permissible raw data formats
     FILE_FORMATS = ["edf", "edf+", "bdf", "bdf+"]
@@ -372,7 +379,7 @@ class bids_emg_recording(bids_dataset):
             raise ValueError(f"Invalid fileformat: {fileformat}")
 
         # Initialize metadata
-        self.channels = pd.DataFrame(columns=["name", "type", "unit"])
+        self.channels = pd.DataFrame(columns=["name", "type", "units"])
         self.electrodes = pd.DataFrame(
             columns=["name", "x", "y", "z", "coordinate_system"]
         )
@@ -712,9 +719,9 @@ class bids_emg_recording(bids_dataset):
             with open(filename, "r") as f:
                 self.events_sidecar = json.load(f)            
 
-    def set_metadata(self, field_name, source):
+    def set_metadata(self, field_name, source, overwrite=False):
 
-        super().set_metadata(field_name, source)
+        super().set_metadata(field_name, source, overwrite)
 
         if field_name == "channels":
             # Drop duplicates
