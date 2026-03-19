@@ -3,6 +3,7 @@ import os
 import re
 import warnings
 import subprocess
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -350,7 +351,7 @@ class bids_emg_recording(bids_dataset):
 
     # Define valid metadata files that can be inherited and valid inheritance levels
     INHERITABLE_FILES = [
-        "electrodes", "electrodes_sidecar", "space", "events", "events_sidecar"
+        "electrodes.tsv", "electrodes.json", "space", "events.tsv", "events.json"
     ]
     INHERITABLE_LEVELS = ["dataset" , "task", "subject", "session"]
     # Define permissible raw data formats
@@ -497,14 +498,14 @@ class bids_emg_recording(bids_dataset):
         self.inherited_metadata = {f: True for f in metadata_files}
         self.inherited_levels = {f: inherited_level[i] for i, f in enumerate(metadata_files)}
 
-    def _get_bids_filename(self, datatype, extension):
+    def _get_bids_filename(self, extension):
         """
         Get a BIDS compatible filename
         
         """
 
         # Non inherited metdadata files
-        if not self.inherited_metadata.get(datatype, False) or extension in self.FILE_FORMATS: 
+        if not self.inherited_metadata.get(extension, False): 
             fname = f"sub-{self.subject_label}_"
             folder = f"{self.root}sub-{self.subject_label}/" 
 
@@ -527,7 +528,7 @@ class bids_emg_recording(bids_dataset):
 
         # Inherited metdadata files
         else:
-            level = self.inherited_levels[datatype]
+            level = self.inherited_levels[extension]
             if level == "dataset":
                 fname = ""
                 folder = self.root
@@ -540,15 +541,11 @@ class bids_emg_recording(bids_dataset):
             elif level == "session":
                 fname = f"sub-{self.subject_label}_ses-{self.session_label}_"
                 folder = f"{self.root}sub-{self.subject_label}/ses-{self.session_label}/{self.datatype}"
-           
-        if datatype is None:
-            pass
-        elif extension is None:
-            fname = fname + f"{datatype}"
-        else:
-            fname = fname + f"{datatype}.{extension}" 
 
-        name = folder + fname   
+        if extension is None:
+            name = folder + fname
+        else:
+            name = folder + fname + extension
 
         return name
     
@@ -659,35 +656,35 @@ class bids_emg_recording(bids_dataset):
             os.makedirs(self.datapath)
 
         # Write files
-        filename = self._get_bids_filename("channels", "tsv")
+        filename = self._get_bids_filename("channels.tsv")
         if len(self.channels) > 0:
             self.channels.to_csv(filename, sep="\t", index=False, header=True, na_rep="n/a")
             if self.channels_sidecar:   
-                filename = self._get_bids_filename("channels", "json") 
+                filename = self._get_bids_filename("channels.json") 
                 with open(filename, "w") as f:
                     json.dump(self.channels_sidecar, f)
 
-        filename = self._get_bids_filename("emg","json")
+        filename = self._get_bids_filename("emg.json")
         with open(filename, "w") as f:
             json.dump(self.emg_sidecar, f)
         
         if len(self.electrodes) > 0:
-            filename = self._get_bids_filename("electrodes","tsv")
+            filename = self._get_bids_filename("electrodes.tsv")
             self.electrodes.to_csv(filename, sep="\t", index=False, header=True, na_rep="n/a")
             # Coordinate systems metadata is only needed if the electrodes file exists
-            filename = self._get_bids_filename("space", None)
+            filename = self._get_bids_filename("space")
             for name, metadata in self.coord_sidecar.items():
                 filename2 = f"{filename}-{name}_coordsystem.json"
                 with open(filename2, "w") as f:
                     json.dump(metadata, f)
             # Electrodes sidecar is only needed if non pre-defined fields are used        
             if self.electrodes_sidecar:   
-                filename = self._get_bids_filename("electrodes", "json") 
+                filename = self._get_bids_filename("electrodes.json") 
                 with open(filename, "w") as f:
                     json.dump(self.electrodes_sidecar, f)        
 
         if self.emg_data.size > 0:
-            filename = self._get_bids_filename("emg", self.fileformat)
+            filename = self._get_bids_filename(f"emg.{self.fileformat}")
             #self.emg_data.write(filename)
             if self.emg_data.shape[0] != len(self.channels):
                 channel_names = [f"Ch{i}" for i in range(self.emg_data.shape[0])]
@@ -701,10 +698,10 @@ class bids_emg_recording(bids_dataset):
 
         # Write events.tsv and sidecar
         if len(self.events) > 0:
-            filename = self._get_bids_filename("events", "tsv")
+            filename = self._get_bids_filename("events.tsv")
             self.events.to_csv(filename, sep="\t", index=False, header=True, na_rep="n/a")
 
-            name = self._get_bids_filename("events", "json")
+            name = self._get_bids_filename("events.json")
             if ((self.overwrite or not os.path.isfile(name)) and self.events_sidecar):
                 with open(name, "w") as f:
                     json.dump(self.events_sidecar, f)
@@ -717,21 +714,21 @@ class bids_emg_recording(bids_dataset):
         """
         super().read()
 
-        filename = self._get_bids_filename("channels", "tsv")
+        filename = self._get_bids_filename("channels.tsv")
         if os.path.isfile(filename):
             self.channels = pd.read_table(filename, on_bad_lines="warn")
 
-        filename = self._get_bids_filename("channels", "json")
+        filename = self._get_bids_filename("channels.json")
         if os.path.isfile(filename):
             with open(filename, "r") as f:
                 self.channels_sidecar = json.load(f)   
 
-        filename = self._get_bids_filename("emg","json")    
+        filename = self._get_bids_filename("emg.json")    
         if os.path.isfile(filename):
             with open(filename, "r") as f:
                 self.emg_sidecar = json.load(f)
 
-        filename = self._get_bids_filename("electrodes","tsv")
+        filename = self._get_bids_filename("electrodes.tsv")
         if os.path.isfile(filename):
             self.electrodes = pd.read_table(filename, on_bad_lines="warn")
         else:
@@ -740,7 +737,7 @@ class bids_emg_recording(bids_dataset):
             if os.path.isfile(filename):
                 self.electrodes = pd.read_table(filename, on_bad_lines="warn")    
 
-        filename = self._get_bids_filename("electrodes","json")
+        filename = self._get_bids_filename("electrodes.json")
         if os.path.isfile(filename):
             with open(filename, "r") as f:
                 self.electrodes_sidecar = json.load(f)
@@ -751,7 +748,7 @@ class bids_emg_recording(bids_dataset):
                 with open(filename, "r") as f:
                     self.electrodes_sidecar = json.load(f)        
 
-        serach_parts = [Path(self._get_bids_filename(None, None)).name, "coordsystem"]
+        serach_parts = [Path(self._get_bids_filename(None)).name, "coordsystem"]
         filename = [f for f in Path(self.datapath).iterdir()
                     if all(part in f.name for part in serach_parts)]
         if len(filename) == 0:
@@ -767,13 +764,13 @@ class bids_emg_recording(bids_dataset):
                 with open(filename[i], "r") as f:
                     self.coord_sidecar.update({coordname: json.load(f)})
 
-        filename = self._get_bids_filename("emg", self.fileformat)
+        filename = self._get_bids_filename(f"emg.{self.fileformat}")
         if os.path.isfile(filename):
             #self.emg_data = read_edf(filename)
             self.emg_data, _ , _ = read_edf(filename)
 
         # Read events .tsv
-        filename = self._get_bids_filename("events","tsv")
+        filename = self._get_bids_filename("events.tsv")
         if os.path.isfile(filename):
             self.events = pd.read_table(filename, on_bad_lines="warn")
         else:
@@ -782,7 +779,7 @@ class bids_emg_recording(bids_dataset):
             if os.path.isfile(filename):
                 self.events = pd.read_table(filename, on_bad_lines="warn") 
 
-        filename = self._get_bids_filename("events", "json")           
+        filename = self._get_bids_filename("events.json")           
         if os.path.isfile(filename):
             with open(filename, "r") as f:
                 self.events_sidecar = json.load(f)   
@@ -954,16 +951,16 @@ class bids_neuromotion_recording(bids_emg_recording):
         super().write()
 
         # Write simulation-specific files
-        filename = self._get_bids_filename("spikes","tsv")
+        filename = self._get_bids_filename("spikes.tsv")
         self.spikes.to_csv(filename, sep="\t", index=False, header=True, na_rep="n/a")
-        filename = self._get_bids_filename("motorunits","tsv")
+        filename = self._get_bids_filename("motorunits.tsv")
         self.motor_units.to_csv(filename, sep="\t", index=False, header=True, na_rep="n/a")
-        filename = self._get_bids_filename("internals","tsv")
+        filename = self._get_bids_filename("internals.tsv")
         self.internals_sidecar.to_csv(filename, sep="\t", index=False, header=True, na_rep="n/a")
-        filename = self._get_bids_filename("simulation","json")
+        filename = self._get_bids_filename("simulation.json")
         with open(filename, "w") as f:
             json.dump(self.simulation_sidecar, f)
-        filename = self._get_bids_filename("internals","edf")    
+        filename = self._get_bids_filename(f"internals.{self.fileformat}")    
         #self.internals.write_edf(filename)
 
         channel_names = [f"{i}" for i in range(self.internals.shape[0])]
@@ -980,24 +977,24 @@ class bids_neuromotion_recording(bids_emg_recording):
         super().read()
 
         # Read simulation-specific files
-        filename = self._get_bids_filename("spikes","tsv")
+        filename = self._get_bids_filename("spikes.tsv")
         if os.path.isfile(filename):
             self.spikes = pd.read_table(filename, on_bad_lines="warn")
-        filename = self._get_bids_filename("motorunits","tsv")    
+        filename = self._get_bids_filename("motorunits.tsv")    
         if os.path.isfile(filename):
             self.motor_units = pd.read_table(
                 filename, on_bad_lines="warn"
             )
-        filename = self._get_bids_filename("internals","tsv")    
+        filename = self._get_bids_filename("internals.tsv")    
         if os.path.isfile(filename):
             self.internals_sidecar = pd.read_table(
                 filename, on_bad_lines="warn"
             )
-        filename = self._get_bids_filename("simulation","json")    
+        filename = self._get_bids_filename("simulation.json")    
         if os.path.isfile(filename):
             with open(filename, "r") as f:
                 self.simulation_sidecar = json.load(f)
-        filename = self._get_bids_filename("internals", self.fileformat)
+        filename = self._get_bids_filename(f"internals.{self.fileformat}")
         if os.path.isfile(filename):
             #self.internals = read_edf(filename)
             self.internals, _, _ = read_edf(filename)
@@ -1014,7 +1011,8 @@ class bids_decomp_derivatives(bids_emg_recording):
         "descriptions.tsv"
     ]
 
-    INHERITABLE_FILES = []
+    INHERITABLE_FILES = ["events.json"]
+    INHERITABLE_LEVELS = ["dataset" , "task", "subject", "session"]
 
     def __init__(
         self,
@@ -1030,6 +1028,8 @@ class bids_decomp_derivatives(bids_emg_recording):
         run_label="01",
         recording_label=None,
         desc_label="decomposed",
+        inherited_metadata=None,
+        inherited_level = None,
         fsamp = 2048,
         root="./",
         fileformat="edf",
@@ -1043,9 +1043,9 @@ class bids_decomp_derivatives(bids_emg_recording):
 
         # Process name and session input
         if session_label is None:
-            datapath = f"/sub-{subject_label}/{datatype}/"
+            datapath = f"sub-{subject_label}/{datatype}/"
         else:
-            datapath = f"/sub-{subject_label}/ses-{session_label}/{datatype}/"
+            datapath = f"sub-{subject_label}/ses-{session_label}/{datatype}/"
 
         # Store essential information for BIDS compatible folder structure in a dictonary
         #self.datapath = datapath
@@ -1105,13 +1105,23 @@ class bids_decomp_derivatives(bids_emg_recording):
                 "Name": pipelinename
             }]
         }
-        self.log_sidecar = {}
+        self.log = {}
 
-        self.readme = """# Some BIDS Dataset
+        self.code = []
+
+        self.readme = """# Some BIDS derivative
 
         Your dataset description goes here
 
         """ 
+
+        # Initialize empty inheritance dictionary
+        self.inherited_metadata = {}
+        self.inherited_levels = {}
+
+        # Set inherited metadata if provided
+        if inherited_metadata is not None:
+            self._set_inherited_metadata(inherited_metadata, inherited_level)
 
     def _init_event_sidecar(self):
         """
@@ -1142,6 +1152,66 @@ class bids_decomp_derivatives(bids_emg_recording):
         }
 
         return metadata
+    
+    def _get_bids_filename(self, extension):
+
+        """
+        Get a BIDS compatible filename
+        
+        """
+
+        # Non inherited metdadata files
+        if not self.inherited_metadata.get(extension, False): 
+
+            folder = self.derivative_root
+            if extension == "log.json":
+                folder = f"{folder}logs/"        
+
+            fname = f"sub-{self.subject_label}_"
+            folder = f"{folder}sub-{self.subject_label}/" 
+
+            if self.session_label is not None:
+                fname = fname + f"ses-{self.session_label}_"
+                folder = folder + f"ses-{self.session_label}/"
+
+            folder = folder + f"{self.datatype}/"    
+
+            fname = fname + f"task-{self.task_label}_"
+
+            if self.acq_label is not None:
+                fname = fname + f"acq-{self.acq_label}_"
+            
+            if self.run_label is not None :
+                fname = fname + f"run-{self.run_label}_"
+
+            if self.recording_label is not None :
+                fname = fname + f"recording-{self.recording_label}_"  
+
+            fname = f"{fname}desc-{self.desc_label}_"       
+
+        # Inherited metdadata files
+        else:
+            level = self.inherited_levels[extension]
+            if level == "dataset":
+                fname = ""
+                folder = self.root
+            elif level == "task":
+                fname = self.task_label
+                folder = self.root
+            elif level == "subject":
+                fname = f"sub-{self.subject_label}_"
+                folder = f"{self.root}sub-{self.subject_label}/{self.datatype}/"
+            elif level == "session":
+                fname = f"sub-{self.subject_label}_ses-{self.session_label}_"
+                folder = f"{self.root}sub-{self.subject_label}/ses-{self.session_label}/{self.datatype}"
+            fname = f"{fname}desc-{self.desc_label}_"    
+           
+        if extension is None:
+            name = folder + fname
+        else:
+            name = folder + fname + extension  
+
+        return name
 
     def write(self):
         """
@@ -1151,109 +1221,96 @@ class bids_decomp_derivatives(bids_emg_recording):
         # Generate an empty set of folders for your BIDS dataset
         if not os.path.exists(self.derivative_datapath):
             os.makedirs(self.derivative_datapath)
-
-        name = self.derivative_datapath + f"sub-{self.subject_label}_"
-        if self.session_label is not None:
-            name = name + f"ses-{self.session_label}_"
-        name = name + f"task-{self.task_label}_"
-        if self.acq_label is not None:
-            name = name + f"acq-{self.acq_label}_"
-        if self.run_label is not None:
-            name = name + f"run-{self.run_label}_"
-        if self.recording_label is not None:
-            name = name + f"recording-{self.recording_label}_"    
-        name = f"{name}desc-{self.desc_label}_"    
-
-        # write *_predictedspikes.tsv
-        self.events.to_csv(
-            name + "events.tsv", sep="\t", index=False, header=True, na_rep="n/a"
-        )
-        # write *_log.json
-        if self.log_sidecar:    
-            fname = name + "log.json"
-            with open(fname, "w") as f:
-                json.dump(self.log_sidecar, f)    
         
-        if self.source.size > 0:
-            # write *_desc-decomposed_sources.edf file
-            filename = f"{name}sources.{self.fileformat}"
+        # write *_events.tsv
+        fname = self._get_bids_filename("events.tsv")
+        self.events.to_csv(
+            fname, sep="\t", index=False, header=True, na_rep="n/a"
+        )
+        # write events.json
+        fname = self._get_bids_filename("events.json")
+        if self.overwrite or not os.path.isfile(fname):
+            with open(fname, "w") as f:
+                json.dump(self.events_sidecar, f)   
+        # write *_log.json
+        if self.log:  
+            subfolder = self.derivative_datapath.split(self.derivative_root)[1]
+            if not os.path.exists(f"{self.derivative_root}logs/{subfolder}"):   
+                os.makedirs(f"{self.derivative_root}logs/{subfolder}")   
+            fname = self._get_bids_filename("log.json")
+            if self.overwrite or not os.path.isfile(fname):
+                with open(fname, "w") as f:
+                    json.dump(self.log, f)   
+        # write *_desc-decomposed_sources.edf + sidecar file
+        if self.source.size > 0:   
+            fname = self._get_bids_filename(f"sources.{self.fileformat}")
             channel_names = [f"Unit_{i}" for i in range(self.source.shape[0])]
             signal_headers = make_signal_headers(
                 channel_names, 
                 sample_frequency=self.fsamp
             )
-            write_edf(filename, self.source, signal_headers)
-            # write *_sources.json
-            filename = f"{name}sources.json"
-            with open(filename, "w") as f:
+            write_edf(fname, self.source, signal_headers)
+            fname = self._get_bids_filename("sources.json")
+            with open(fname, "w") as f:
                 json.dump(self.source_sidecar, f)
-        #self.source.write(name + self.datatype + self.fileformat)
         # write dataset.json
         fname = f"{self.derivative_root}dataset_description.json"
         if self.overwrite or not os.path.isfile(fname):
             with open(fname, "w") as f:
-                json.dump(self.dataset_sidecar, f)
-
-        # write events.json
-        fname = f"{self.derivative_root}desc-{self.desc_label}_events.json"
-        if self.overwrite or not os.path.isfile(fname):
-            with open(fname, "w") as f:
-                json.dump(self.events_sidecar, f)      
-
+                json.dump(self.dataset_sidecar, f)   
         # write descriptions.tsv
         fname = f"{self.derivative_root}descriptions.tsv" 
         if self.overwrite or not os.path.isfile(fname):
             self.descriptions.to_csv(
                 fname, sep="\t", index=False, header=True, na_rep="n/a"
             )
-
+        # write README
         name = f"{self.derivative_root}README.md"
         if self.overwrite or not os.path.isfile(name):
             with open(name, "w", encoding="utf-8") as f:
                 f.write(self.readme)      
-
         # write .bidsignore
         if len(self.BIDSIGNORE) > 0:
-            fname = Path(self.derivative_root) / ".bidsignore"
+            fname = Path(self.root) / ".bidsignore"
             if self.overwrite or not fname.exists():
                 fname.write_text("\n".join(self.BIDSIGNORE) + "\n")
+        # Save code files
+        if len(self.code) > 0:  
+            if not os.path.exists(self.derivative_root + "code/"):   
+                os.makedirs(self.derivative_root + "code/")   
+            for i in range(len(self.code)):
+                if os.path.isfile(self.code[i]):
+                    shutil.copy(self.code[i], f"{self.derivative_root}code/")
+                
                    
 
     def read(self):
         """
         Import data from BIDS dataset
 
-        """
-        
-        #
-        name = self.derivative_datapath + f"sub-{self.subject_label}_"
-        if self.session_label is not None:
-            name = name + f"ses-{self.session_label}_"
-        name = name + f"task-{self.task_label}_"
-        if self.acq_label is not None:
-            name = name + f"acq-{self.acq_label}_"
-        if self.run_label is not None:
-            name = name + f"run-{self.run_label}_"
-        if self.recording_label is not None:
-            name = name + f"recording-{self.recording_label}_"    
-        name = f"{name}desc-{self.desc_label}_"        
+        """             
 
         # read *_predictedspikes.tsv
-        fname = name + "events.tsv"
+        fname = self._get_bids_filename("events.tsv")
         if os.path.isfile(fname):
             self.events = pd.read_table(fname, on_bad_lines="warn")
+        # read *_events.json
+        fname = self._get_bids_filename("events.json")
+        if os.path.isfile(fname):
+            with open(fname, "r") as f:
+                self.events_sidecar = json.load(f)    
         # read *_sources.json
-        fname = name + "sources.json"
+        fname = self._get_bids_filename("sources.json")
         if os.path.isfile(fname):
             with open(fname, "r") as f:
                 self.source_sidecar = json.load(f)
         # read *_log.json
-        fname = name + "log.json"
+        fname = self._get_bids_filename("log.json")
         if os.path.isfile(fname):
             with open(fname, "r") as f:
                 self.source_sidecar = json.load(f)        
         # read *.edf file
-        fname = name + "sources" + self.fileformat
+        fname = self._get_bids_filename(f"sources.{self.fileformat}")
         if os.path.isfile(fname):
             #self.source = read_edf(fname)
             self.source, _, _ = read_edf(fname)
@@ -1261,12 +1318,7 @@ class bids_decomp_derivatives(bids_emg_recording):
         fname = f"{self.derivative_root}dataset_description.json"
         if os.path.isfile(fname):
             with open(fname, "r") as f:
-                self.dataset_sidecar = json.load(f)
-        # write events.json
-        fname = f"{self.derivative_root}desc-decomposed_events.json"
-        if os.path.isfile(fname):
-            with open(fname, "r") as f:
-                self.events_sidecar = json.load(f)          
+                self.dataset_sidecar = json.load(f)          
         # read descriptions.tsv
         fname = f"{self.derivative_root}descriptions.tsv" 
         if os.path.isfile(fname):
@@ -1279,7 +1331,12 @@ class bids_decomp_derivatives(bids_emg_recording):
         # read .bidsignore   
         fname = Path(self.derivative_root) / ".bidsignore"
         if fname.exists():    
-            self.BIDSIGNORE = fname.read_text(encoding="utf-8").splitlines()           
+            self.BIDSIGNORE = fname.read_text(encoding="utf-8").splitlines()
+        # list file names in subfolder code    
+        code_path = Path(f"{self.derivative_root}code/")
+        if code_path.exists:
+            files = list(code_path.rglob("*"))
+            self.code = [f.name for f in files]               
 
     def add_spikes(self, spikes, fsamp):
         """
@@ -1343,29 +1400,29 @@ def run_bids_validator(
     
     """
 
+    # Run bids validator
     result = subprocess.run(
         ["bids-validator-deno", "--format", "json", path],
         capture_output=True,
         text=True
     )
-
+    # Extract and filter all issues
     validation = json.loads(result.stdout)
-
     issues = validation["issues"]["issues"]
-    issues = [f for f in issues if f["code"] not in ignored_codes]
-    #messages = [f for f in messages if f["subCode"] not in ignored_fields]
+    issues = [f for f in issues if (not "code" in f or f["code"] not in ignored_codes)]
     issues = [f for f in issues if (not "subCode" in f or f["subCode"] not in ignored_fields)]
-    issues = [f for f in issues if f["location"] not in ignored_files]
+    issues = [f for f in issues if (not "location" in f or f["location"] not in ignored_files)]
+    # Split issues in errors and warnings
     errors = [f for f in issues if f["severity"] == "error"]
     warnings = [f for f in issues if f["severity"] == "warning"]
-
+    # Print issues
     if print_errors:
         print(f"Number of detected errors: {len(errors)}")
         print(json.dumps(errors, indent=4))
     if print_warnings:    
         print(f"Number of detected warnings: {len(warnings)}")
         print(json.dumps(warnings, indent=4))
-
+    # Check if the folder is BIDS valid
     valid = True if len(errors) == 0 else False    
 
     return errors, warnings, valid
