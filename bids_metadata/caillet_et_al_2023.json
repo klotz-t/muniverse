@@ -27,7 +27,7 @@
             ],
         "GeneratedBy": [{
             "Name": "MUniverse", 
-            "Version": "0.1.0", 
+            "Version": "1.0", 
             "CodeURL": "https://github.com/dfarinagroup/muniverse/scripts/",
             "ScriptName": "caillet2023_to_bids.py",
             "Description": "Semi-automated conversion of the original data into BIDS format"    
@@ -45,8 +45,7 @@
         "EMGReference": "R1",
         "EMGGround": "R2", 
         "SamplingFrequency": 2048, 
-        "PowerLineFrequency": 50, 
-        "TaskName": "Isometric-ankle-dorsiflexion", 
+        "PowerLineFrequency": 50,  
         "ElectrodeManufacturer": "OTBioelettronica",
         "ElectrodeManufacturersModelName": "GR04MM1305",
         "ElectrodeMaterial": "gold coated",
@@ -72,8 +71,8 @@
             }
         },
         "RecordingType": "continuous",
-        "SetUpDescription": "The participant sat on a massage table with the hipsflexed at 30 degree, 0 degree being the hip neutral position, and their knees fully extended. We fixed the foot of the dominant leg (right in all participants) onto the pedal of a commercial dynamometer (OT Bioelettronica) positioned at 30 degree in the plantarflexion direction, 0 degree being the foot perpendicular to the shank. The thigh was fixed to the massage tablewith an inextensible 3-cm-wide Velcro strap. The foot was fixed to the pedal with inextensible straps positioned around the proximal phalanx, metatarsal and cuneiform. Force signals were recorded with a load cell (CCT Transducer s.a.s.) connected in-series to the pedal using the same acquisition system as for the HD-EMG recordings. The dynamometer was positioned accordingly to the participant's lower limb length andsecured to the massage table to avoid any motion during the contractions.", 
-        "TaskDescription": "Each participant performed two trapezoidal contractions at 30 percent and 50 percent MVC with 120 s of rest in between, consisting of linear ramps up and down performed at 5 percent per second and aplateau maintained for 20 and 15 s at 30 percent and 50 percent MVC, respectively. The order of the contractions was randomized.", 
+        "TaskName": "Isometric-ankle-dorsiflexion",
+        "TaskDescription": "Trapezoidal contractions at 30 percent and 50 percent MVC",
         "Instructions": "Follow the requested isometric torque trajetory, which is provided via real-time visual feedback.",        
         "InstitutionName": "Imperial Collage London", 
         "InstitutionAddress": "London SW7 2AZ, United Kingdom", 
@@ -83,13 +82,15 @@
     "CoordSystemSidecar":{
         "grid1": {
             "EMGCoordinateSystem": "Other", 
-            "EMGCoordinateSystemDescription": "x-axis: proximal -> distal; y-axis: lateral -> medial; all local electrode coordinates (per grid) are mapped on a single global coordinate system.",
+            "EMGCoordinateSystemDescription": "x-axis: proximal -> distal; y-axis: medial -> lateral; all local electrode coordinates (per grid) are mapped on a single global coordinate system.",
             "EMGCoordinateUnits": "mm",
-            "AnchorElectrode": "E12 - Grid1"
+            "ParentCoordinateSystem": "lowerLeg",
+            "AnchorElectrode": "E12 - Grid1",
+            "AnchorCoordinates": [25, 0, 0]
         },
         "lowerLeg": {
             "EMGCoordinateSystem": "Other",
-            "EMGCoordinateSystemDescription": "x-axis: proximal -> distal; y-axis: lateral -> medial; the coordinate system is located at the knee joint", 
+            "EMGCoordinateSystemDescription": "x-axis: proximal -> distal; y-axis: medial -> lateral; the coordinate system is located at the knee joint", 
             "EMGCoordinateUnits": "percent"
         }
     }

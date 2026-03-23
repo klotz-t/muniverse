@@ -13,7 +13,7 @@ from pathlib import Path
 
 def get_grid_coordinates(grid_name):
     """
-    Helper funcion to extract electrode coordinates given a grid type.
+    Helper function to extract electrode coordinates given a grid type.
     
     """
 
@@ -69,18 +69,18 @@ def make_electrode_metadata(
             if i==0: # Lateral-Proximal
                 df.loc[elecorode_idx, "x"] = xg[j]
                 df.loc[elecorode_idx, "y"] = yg[j]
-            elif i==3: # Medial-Proximal
+            elif i==1: # Medial-Proximal
                 y_shift = 20 
                 df.loc[elecorode_idx, "x"] = xg[j]
                 df.loc[elecorode_idx, "y"] = yg[j] + y_shift
-            elif i==1: # Lateral-Distal
-                x_shift = 100 
-                y_shift = 16 
-                df.loc[elecorode_idx, "x"] = x_shift - xg[j]
-                df.loc[elecorode_idx, "y"] = y_shift - yg[j]
-            elif i==2: # Medial-Distal
+            elif i==2: # Lateral-Distal
                 x_shift = 100 
                 y_shift = 36 
+                df.loc[elecorode_idx, "x"] = x_shift - xg[j]
+                df.loc[elecorode_idx, "y"] = y_shift - yg[j]
+            elif i==3: # Medial-Distal
+                x_shift = 100 
+                y_shift = 16 
                 df.loc[elecorode_idx, "x"] = x_shift - xg[j]
                 df.loc[elecorode_idx, "y"] = y_shift - yg[j]
             # Take care of the electrode index    
@@ -215,26 +215,53 @@ readme = """
 # Caillet et al 2023: HDsEMG recordings
 
 BIDS-formatted version of the HDsEMG dataset published in *[Caillet et al. 2023](https://doi.org/10.1523/ENEURO.0064-23.2023)*. 
-Six healthy male subjects performed two submaximal (30 and 50 percent MVC) 
-isometric ankle  dorsiflexions. EMG signals were recorded from the right tibialis anterior 
-using four arrays  of 64 surface electrodes for a total of 256 electrodes.
 
-# Missing data
+### Population
+Six healthy male subjects (age: 26$\pm$4 years; height: 174$\pm$7 cm; weight: 66$\pm$15 kg).
+
+### Protocol description
+Each participant performed two trapezoidal contractions at 30 percent and 50 percent MVC, 
+with 120 s of rest in between, consisting of linear ramps up and down performed at 
+5 percent per second and a plateau maintained for 20 and 15 s at 30 percent and 
+50 percent MVC, respectively. The order of the contractions was randomized.
+
+### Electrode placement
+First, the skin was shaved, abrased and cleansed with 70 percent ethyl alcohol.
+Next, four grids (64 channels) were carefully positioned side-to-side with a 4-mm distance between the 
+electrodes at the edges of adjacent grids. The 256 electrodes were centered on the 
+muscle belly (right tibialis anterior) and laid within the muscle perimeter identified 
+through palpation. Two bands damped with water were placed around the ankle as 
+ground (R2) and reference (R1) electrodes. 
+
+### Set-up description
+The participant sat on a massage table with the hips flexed at 30 degrees, 0 degrees being 
+the hip neutral position, and their knees fully extended. We fixed the foot of 
+the dominant leg (right in all participants) onto the pedal of a commercial dynamometer (OT Bioelettronica) 
+positioned at 30 degrees in the plantarflexion direction, 0 degrees being the foot 
+perpendicular to the shank. The thigh was fixed to the massage table with an 
+inextensible 3-cm-wide Velcro strap. The foot was fixed to the pedal with inextensible 
+straps positioned around the proximal phalanx, metatarsal, and cuneiform. Force signals 
+were recorded with a load cell (CCT Transducer s.a.s.) connected in-series to the pedal 
+using the same acquisition system as for the HD-EMG recordings. The dynamometer was 
+positioned according to the participant's lower limb length and secured to the massage table 
+to avoid any motion during the contractions. 
+
+### Missing data
 There is no 50 % MVC ramp-and-hold contraction for the second subject.
 
-# Coordinate systems
+### Coordinate systems
 All electrode coordinates (reported in mm) have been converted to a common reference 
 frame corresponding to the first EMG-array (*space-grid1*). 
-The positions of the reference and ground electrodes are reported in a seperate 
-coordinate system (*space-lowerLeg*) reported in percent of the lower leg length. 
+The positions of the reference and ground electrodes are reported in a separate 
+coordinate system (*space-lowerLeg*) reported as a percentage of the lower leg length. 
 
-# Conversion
-The dataset has been converted semi-automatically using the *MUniverse* software.
+### Conversion
+The dataset has been converted semi-automatically using the [*MUniverse*](https://github.com/dfarinagroup/muniverse/tree/main) software.
 See *dataset_description.json* for further details.
 
 """
 
-# Prepare a events sidecar file
+# Prepare an events sidecar file
 events_sidecar = {
     "onset": {
         "Description": "Onset time of the event in seconds from recording start.", 
@@ -297,20 +324,24 @@ for i in np.arange(n_sub):
             filename = 'S'  + str(i+1) + '_30MVC.otb+'
             task_label = 'isometric30percentmvc'
             mvc_level = 30
+            plateau = 20
         elif j==1:
             filename = 'S'  + str(i+1) + '_50MVC.otb+'
             task_label = 'isometric50percentmvc'
             mvc_level = 50
+            plateau = 15
 
         print(f"    - Recording {j}: task-{task_label}")    
 
-        # Import daata from otb+ file
+        # Import data from otb+ file
         ngrids = 4
         fname =  sourcepath + folder + filename
         (data, metadata) = open_otb(fname, ngrids)
 
         # channel metadata
         ch_metadata = format_otb_channel_metadata(data,metadata,ngrids)
+        ch_metadata.drop(columns="interelectrode_distance", axis=1, inplace=True)
+        ch_metadata.loc[:255, "target_muscle"] = "right tibialis anterior"
         # electrode metadata
         el_metadata = make_electrode_metadata(ngrids=4)
         # space metadata
@@ -321,7 +352,8 @@ for i in np.arange(n_sub):
         emg_sidecar['SoftwareVersions'] = metadata['subject_info']['software_version']
         emg_sidecar['ManufacturersModelName'] = metadata['device_info']['Name']
         emg_sidecar["TaskName"] = task_label
-        emg_sidecar["RecordingDuration"] = data.shape[1]/fsamp
+        emg_sidecar["TaskDescription"] = f"Trapezoidal contraction: MVC level: {mvc_level} % MVC; MVC rate during ramps: 5 % MVC / s; plateau duration: {plateau} s."
+        #emg_sidecar["RecordingDuration"] = data.shape[1]/fsamp
         # events metadata
         indices = [i for i, s in enumerate(ch_metadata["description"]) if "requested path" in s]
         target = data[indices[0], :]
@@ -332,9 +364,9 @@ for i in np.arange(n_sub):
             dataset_config=Caillet_2023,
             subject_label=str(i+1).zfill(2), 
             task_label=task_label, 
-            datatype='emg',
-            inherited_metadata=["electrodes", "space"],
-            inherited_level=["subject", "subject"]
+            datatype="emg",
+            inherited_metadata=["electrodes.tsv", "coordsystem.json", "events.json"],
+            inherited_level=["subject", "subject", "dataset"]
         )
         emg_recording.set_metadata(field_name='channels', source=ch_metadata)
         emg_recording.set_metadata(field_name='electrodes', source=el_metadata) 
