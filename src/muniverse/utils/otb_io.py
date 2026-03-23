@@ -194,7 +194,7 @@ def format_otb_channel_metadata(data, metadata, n_adapters):
         n_channels = int(
             metadata["adapter_info"][i + 1].attrib["ChannelStartIndex"]
         ) - int(metadata["adapter_info"][i].attrib["ChannelStartIndex"])
-        ied = channel_metadata[j].attrib["Description"]
+        ied = channel_metadata[i].attrib["Description"]
         ied = int(re.search(r'(\d+)\s*mm',ied).group(1))
         low_cutoff = int(metadata["adapter_info"][i].attrib["HighPassFilter"])
         high_cutoff = int(metadata["adapter_info"][i].attrib["LowPassFilter"])
