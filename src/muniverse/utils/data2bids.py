@@ -1072,9 +1072,13 @@ class bids_decomp_derivatives(bids_emg_recording):
         self.overwrite = overwrite
         self.datatype = datatype
         self.fileformat = fileformat
+        self.datasetname = datasetname
+        self.pipelinename = pipelinename
 
         # Adopt labels from an emg recording in BIDS format
         if isinstance(rec_config, bids_emg_recording):
+            root = str(Path(rec_config.root).parent)
+            datasetname = rec_config.datasetname
             self.root = rec_config.root
             self.datasetname = rec_config.datasetname
             self.subject_label = rec_config.subject_label
@@ -1089,14 +1093,13 @@ class bids_decomp_derivatives(bids_emg_recording):
         if format == "standalone":
             self.datasetname = f"{datasetname}-{pipelinename}"
             self.derivative_root = str(Path(root) / self.datasetname) + "/"
-
         else:
             self.datasetname = datasetname
             self.derivative_root = str(Path(root) / datasetname) + f"/derivatives/{pipelinename}/"
 
         self.root = str(Path(root) / self.datasetname) + "/"
-        self.derivative_datapath = self.root + datapath
-        self.pipelinename = pipelinename
+        self.derivative_datapath = self.derivative_root + datapath
+        self.format = format
 
         #self.source = Edf([EdfSignal(np.zeros(1), sampling_frequency=1)])
         self.fsamp = fsamp
@@ -1235,6 +1238,8 @@ class bids_decomp_derivatives(bids_emg_recording):
 
         """
         # Generate an empty set of folders for your BIDS dataset
+        if not os.path.exists(self.derivative_root):
+            os.makedirs(self.derivative_root)
         if not os.path.exists(self.derivative_datapath):
             os.makedirs(self.derivative_datapath)
         
@@ -1281,10 +1286,11 @@ class bids_decomp_derivatives(bids_emg_recording):
                 fname, sep="\t", index=False, header=True, na_rep="n/a"
             )
         # write README
-        name = f"{self.derivative_root}README.md"
-        if self.overwrite or not os.path.isfile(name):
-            with open(name, "w", encoding="utf-8") as f:
-                f.write(self.readme)      
+        if self.format == "standalone":
+            name = f"{self.derivative_root}README.md"
+            if self.overwrite or not os.path.isfile(name):
+                with open(name, "w", encoding="utf-8") as f:
+                    f.write(self.readme)      
         # write .bidsignore
         if len(self.BIDSIGNORE) > 0:
             fname = Path(self.root) / ".bidsignore"
@@ -1359,22 +1365,40 @@ class bids_decomp_derivatives(bids_emg_recording):
         Convert a dictionary of spike times to long-format TSV-style DataFrame.
 
         Parameters:
-            spike_dict (dict): {source_id: list of spike timings (in samples)}
+            spikes (dict or DataFrame): {source_id: list of spike timings (in samples)} 
+                    or long-format table (must contain unit_id and one of onset or sample)
             fsamp(float): Sampling frequency in Hz
 
         """
-        rows = []
-        for unit_id, spike_times in spikes.items():
-            for t in spike_times:
-                rows.append({
-                    "onset": t/fsamp,
-                    "duration": 0,
-                    "sample": t,
-                    "unit_id": unit_id, 
-                    "description": "motor-unit-spike"
-                })
 
-        frames = [self.events, pd.DataFrame(rows)]
+        if isinstance(spikes, dict):
+            rows = []
+            for unit_id, spike_times in spikes.items():
+                for t in spike_times:
+                    rows.append({
+                        "onset": t/fsamp,
+                        "duration": 0,
+                        "sample": t,
+                        "unit_id": unit_id, 
+                        "description": "motor-unit-spike"
+                    })
+
+            frames = [self.events, pd.DataFrame(rows)]
+            
+        elif isinstance(spikes, pd.DataFrame):
+
+            if "onset" not in spikes.columns:
+                spikes["onset"] = spikes["sample"] / fsamp
+            if "sample" not in spikes.columns:
+                spikes["sample"] = spikes["onset"] * fsamp      
+            if "duration" not in spikes.columns:
+                spikes["duration"] = 0
+            if "description" not in spikes.columns:
+                spikes["description"] =  "motor-unit-spike"
+
+            spikes = spikes.loc[:, ["onset", "duration", "sample", "unit_id", "description"]]      
+            frames = [self.events, spikes] 
+
         frames = [f for f in frames if not f.empty]
         self.events = pd.concat(frames, ignore_index=True)
         self.events = self.events.drop_duplicates(subset=["onset", "unit_id", "sample"])
