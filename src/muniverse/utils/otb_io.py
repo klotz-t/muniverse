@@ -203,8 +203,8 @@ def format_otb_channel_metadata(data, metadata, n_adapters):
             
             df.loc[len(df)] = [
                 f"Ch{str(ch_idx+1).zfill(3)}",        # name
-                metadata["units"][ch_idx],            # units
-                "EMG",                                # type    
+                "EMG",                                # type 
+                metadata["units"][ch_idx],            # units   
                 "ElectroMyoGraphy",                   # description
                 fsamp,                                # sampling_frequency
                 f"E{str(ch_idx+1).zfill(3)}",         # signal_electrode
@@ -223,8 +223,8 @@ def format_otb_channel_metadata(data, metadata, n_adapters):
 
         df.loc[len(df)] = [
             f"Ch{str(ch_idx+1).zfill(3)}",          # name
-            metadata["units"][ch_idx],              # units
-            "MISC",                                 # type    
+            "MISC",                                 # type 
+            metadata["units"][ch_idx],              # units   
             metadata["aux_info"][i]["description"], # description
             fsamp,                                  # sampling_frequency
             "n/a",                                  # signal_electrode
