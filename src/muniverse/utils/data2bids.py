@@ -67,12 +67,12 @@ class bids_dataset:
         name = f"{self.root}participants.json"
         if self.overwrite or not os.path.isfile(name):
             with open(name, "w") as f:
-                json.dump(self.subjects_sidecar, f)
+                json.dump(self.subjects_sidecar, f, indent=4)
         # write dataset.json
         name = f"{self.root}dataset_description.json"
         if self.overwrite or not os.path.isfile(name):
             with open(name, "w") as f:
-                json.dump(self.dataset_sidecar, f)
+                json.dump(self.dataset_sidecar, f, indent=4)
         # write README.md
         name = f"{self.root}README.md"
         if self.overwrite or not os.path.isfile(name):
@@ -671,11 +671,11 @@ class bids_emg_recording(bids_dataset):
             if self.channels_sidecar:   
                 filename = self._get_bids_filename("channels.json") 
                 with open(filename, "w") as f:
-                    json.dump(self.channels_sidecar, f)
+                    json.dump(self.channels_sidecar, f, indent=4)
 
         filename = self._get_bids_filename("emg.json")
         with open(filename, "w") as f:
-            json.dump(self.emg_sidecar, f)
+            json.dump(self.emg_sidecar, f, indent=4)
         
         if len(self.electrodes) > 0:
             filename = self._get_bids_filename("electrodes.tsv")
@@ -685,12 +685,12 @@ class bids_emg_recording(bids_dataset):
             for name, metadata in self.coord_sidecar.items():
                 filename2 = f"{filename}-{name}_coordsystem.json"
                 with open(filename2, "w") as f:
-                    json.dump(metadata, f)
+                    json.dump(metadata, f, indent=4)
             # Electrodes sidecar is only needed if non pre-defined fields are used        
             if self.electrodes_sidecar:   
                 filename = self._get_bids_filename("electrodes.json") 
                 with open(filename, "w") as f:
-                    json.dump(self.electrodes_sidecar, f)        
+                    json.dump(self.electrodes_sidecar, f, indent=4)        
 
         if self.emg_data.size > 0:
             filename = self._get_bids_filename(f"emg.{self.fileformat}")
@@ -713,7 +713,7 @@ class bids_emg_recording(bids_dataset):
             name = self._get_bids_filename("events.json")
             if ((self.overwrite or not os.path.isfile(name)) and self.events_sidecar):
                 with open(name, "w") as f:
-                    json.dump(self.events_sidecar, f)
+                    json.dump(self.events_sidecar, f, indent=4)
 
 
     def read(self):
@@ -968,7 +968,7 @@ class bids_neuromotion_recording(bids_emg_recording):
         self.internals_sidecar.to_csv(filename, sep="\t", index=False, header=True, na_rep="n/a")
         filename = self._get_bids_filename("simulation.json")
         with open(filename, "w") as f:
-            json.dump(self.simulation_sidecar, f)
+            json.dump(self.simulation_sidecar, f, indent=4)
         filename = self._get_bids_filename(f"internals.{self.fileformat}")    
         #self.internals.write_edf(filename)
 
@@ -1243,7 +1243,7 @@ class bids_decomp_derivatives(bids_emg_recording):
         fname = self._get_bids_filename("events.json")
         if self.overwrite or not os.path.isfile(fname):
             with open(fname, "w") as f:
-                json.dump(self.events_sidecar, f)   
+                json.dump(self.events_sidecar, f, indent=4)   
         # write *_log.json
         if self.log:  
             subfolder = self.derivative_datapath.split(self.derivative_root)[1]
@@ -1252,7 +1252,7 @@ class bids_decomp_derivatives(bids_emg_recording):
             fname = self._get_bids_filename("log.json")
             if self.overwrite or not os.path.isfile(fname):
                 with open(fname, "w") as f:
-                    json.dump(self.log, f)   
+                    json.dump(self.log, f, indent=4)   
         # write *_desc-decomposed_sources.edf + sidecar file
         if self.source.size > 0:   
             fname = self._get_bids_filename(f"sources.{self.fileformat}")
@@ -1264,12 +1264,12 @@ class bids_decomp_derivatives(bids_emg_recording):
             write_edf(fname, self.source, signal_headers)
             fname = self._get_bids_filename("sources.json")
             with open(fname, "w") as f:
-                json.dump(self.source_sidecar, f)
+                json.dump(self.source_sidecar, f, indent=4)
         # write dataset.json
         fname = f"{self.derivative_root}dataset_description.json"
         if self.overwrite or not os.path.isfile(fname):
             with open(fname, "w") as f:
-                json.dump(self.dataset_sidecar, f)   
+                json.dump(self.dataset_sidecar, f, indent=4)   
         # write descriptions.tsv
         fname = f"{self.derivative_root}descriptions.tsv" 
         if self.overwrite or not os.path.isfile(fname):
