@@ -23,8 +23,9 @@ dependencies = [
     "pandas",
     "scikit-learn",
     "easyDataverse",
-    "edfio",
+    "pyedflib,
     "python-dateutil",
+    "bids-validator-deno",
 ]
 
 [project.optional-dependencies]

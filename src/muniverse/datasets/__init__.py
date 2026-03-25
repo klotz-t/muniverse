@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Union
 
-import requests
+#import requests
 
 
 def load_dataset(

@@ -1,9 +1,10 @@
-import os
+import os, re
 import tarfile as tf
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from dateutil import parser
 
 
@@ -19,7 +20,7 @@ def open_otb(inputname, n_adapters):
         n_adapters (int): number of input adapters used in the measurement
 
     Returns:
-        data (ndarray): array of recorded data (samples x channels)
+        data (ndarray): array of recorded data (channels x samples)
         metadata (dict): metadata of the recording
     """
 
@@ -61,7 +62,7 @@ def open_otb(inputname, n_adapters):
     nADbit = int(device_info["ad_bits"])
     nchans = int(device_info["DeviceTotalChannels"])
     # read in the EMG trial data
-    emg_data = np.fromfile(open(trial_label_sig), dtype="int" + str(nADbit))
+    emg_data = np.fromfile(open(trial_label_sig), dtype=f"int{nADbit}")
     emg_data = np.transpose(
         emg_data.reshape(int(len(emg_data) / nchans), nchans)
     )  
@@ -142,7 +143,7 @@ def open_otb(inputname, n_adapters):
         "units": ch_units,
     }
 
-    return (data, metadata)
+    return (data.T, metadata)
 
 
 def format_otb_channel_metadata(data, metadata, n_adapters):
@@ -150,87 +151,94 @@ def format_otb_channel_metadata(data, metadata, n_adapters):
     Extract channel metadata given the output of the open_otb function
 
     Args:
-        data (ndarray): array of recorded data (samples x channels)
+        data (ndarray): array of recorded data (channels x samples)
         metadata (dict): metadata of the recording
 
     Returns:
         ch_metadata (dict): metadata associated with the individual channels
     """
 
-    # Initalize lists for each metadata field
-    ch_names = ["Ch" + str(i) for i in np.arange(1, data.shape[1] + 1)]
-    units = metadata["units"]
-    ch_type = []
-    low_cutoff = []
-    high_cutoff = []
-    sampling_frequency = []
-    signal_electrode = []
-    grid_name = []
-    group = []
-    reference = []
-    target_muscle = []
-    interelectrode_distance = []
-    description = []
+    fsamp = int(metadata["device_info"]["SampleFrequency"])
 
-    electrode_idx = 0
+    # Initalize lists for each metadata field
+    columns = [
+        "name", "type", "units", "description", "sampling_frequency",
+        "signal_electrode", "reference", "group", "target_muscle",
+        "interelectrode_distance", "low_cutoff", "high_cutoff"
+    ]
+
+    df = pd.DataFrame(columns=columns)
+
+    df = df.astype({
+        "name": "string", 
+        "type": "string", 
+        "units": "string",
+        "description": "string", 
+        "sampling_frequency": "float",
+        "signal_electrode": "string", 
+        "reference": "string",
+        "group": "string", 
+        "target_muscle": "string", 
+        "interelectrode_distance": "float",
+        "low_cutoff": "float", 
+        "high_cutoff": "float"
+    })
+
+    ch_idx = 0
 
     # Loop over all EMG channels
     for i in np.arange(n_adapters):
+
+        # Extract adapter specific metadata
         channel_metadata = metadata["adapter_info"][i].findall(".//Channel")
         n_channels = int(
             metadata["adapter_info"][i + 1].attrib["ChannelStartIndex"]
         ) - int(metadata["adapter_info"][i].attrib["ChannelStartIndex"])
+        ied = channel_metadata[i].attrib["Description"]
+        ied = int(re.search(r'(\d+)\s*mm',ied).group(1))
+        low_cutoff = int(metadata["adapter_info"][i].attrib["HighPassFilter"])
+        high_cutoff = int(metadata["adapter_info"][i].attrib["LowPassFilter"])
+
         for j in np.arange(n_channels):
-            electrode_idx += 1
-            ch_type.append("EMG")
-            high_cutoff.append(int(metadata["adapter_info"][i].attrib["LowPassFilter"]))
-            low_cutoff.append(
-                int(metadata["adapter_info"][i].attrib["HighPassFilter"])
-            )
-            sampling_frequency.append(int(metadata["device_info"]["SampleFrequency"]))
-            signal_electrode.append("E" + str(electrode_idx))
-            grid_name.append(channel_metadata[j].attrib["ID"])
-            group.append("Grid" + str(i + 1))
-            reference.append("R1")
-            target_muscle.append(channel_metadata[j].attrib["Muscle"])
-            tmp = channel_metadata[j].attrib["Description"]
-            tmp = tmp.split("Array ")[-1]
-            tmp = tmp.split((" i.e.d."))[0]
-            interelectrode_distance.append(tmp)
-            description.append("ElectroMyoGraphy")
+            
+            df.loc[len(df)] = [
+                f"Ch{str(ch_idx+1).zfill(3)}",        # name
+                "EMG",                                # type 
+                metadata["units"][ch_idx],            # units   
+                "ElectroMyoGraphy",                   # description
+                fsamp,                                # sampling_frequency
+                f"E{str(ch_idx+1).zfill(3)}",         # signal_electrode
+                "R1",                                 # reference
+                f"grid{i+1}",                         # group
+                channel_metadata[j].attrib["Muscle"], # target_muscle
+                ied,                                  # interelectrode_distance
+                high_cutoff,                          # high_cutoff  
+                low_cutoff                            # low_cutoff  
+            ]
+
+            ch_idx += 1
 
     # Loop over non-EMG channels
     for i in np.arange(len(metadata["aux_info"])):
-        ch_type.append("MISC")
-        low_cutoff.append("n/a")
-        high_cutoff.append("n/a")
-        sampling_frequency.append(int(metadata["aux_info"][i]["fsample"]))
-        signal_electrode.append("n/a")
-        grid_name.append("n/a")
-        group.append("n/a")
-        reference.append("n/a")
-        target_muscle.append("n/a")
-        interelectrode_distance.append("n/a")
-        description.append(metadata["aux_info"][i]["description"])
 
-    # Output the channel metadata as dictonary
-    ch_metadata = {
-        "name": ch_names,
-        "type": ch_type,
-        "unit": units,
-        "description": description,
-        "sampling_frequency": sampling_frequency,
-        "signal_electrode": signal_electrode,
-        "reference_electrode": reference,
-        "group": group,
-        "target_muscle": target_muscle,
-        "interelectrode_distance": interelectrode_distance,
-        "grid_name": grid_name,
-        "low_cutoff": low_cutoff,
-        "high_cutoff": high_cutoff,
-    }
+        df.loc[len(df)] = [
+            f"Ch{str(ch_idx+1).zfill(3)}",          # name
+            "MISC",                                 # type 
+            metadata["units"][ch_idx],              # units   
+            metadata["aux_info"][i]["description"], # description
+            fsamp,                                  # sampling_frequency
+            "n/a",                                  # signal_electrode
+            "n/a",                                  # reference
+            "n/a",                                  # group
+            "n/a",                                  # target_muscle
+            "n/a",                                  # interelectrode_distance
+            "n/a",                                  # high_cutoff  
+            "n/a"                                   # low_cutoff  
+        ]
 
-    return ch_metadata
+        ch_idx += 1
+
+    return df
 
 
 def format_subject_metadata(sub_id, metadata):
@@ -252,15 +260,29 @@ def format_subject_metadata(sub_id, metadata):
     age = end.year - start.year
 
     if (end.month, end.day) < (start.month, start.day):
-        age -= 1
+        age -= np.nan
 
-    # Create dictonary with subject metadata
-    subject = {}
-    subject["name"] = sub_id
-    subject["age"] = age
-    subject["sex"] = metadata["subject_info"]["sex"]
-    subject["hand"] = "n/a"
-    subject["weight"] = metadata["subject_info"]["weight"]
-    subject["height"] = metadata["subject_info"]["height"]
+    columns = [
+        "participant_id", "age", "sex", "hand", "weight", "height"
+    ]
 
-    return subject
+    df = pd.DataFrame(columns=columns)
+
+    df.astype({
+        "participant_id": "string",
+        "age": "int",
+        "sex": "string",
+        "hand": "string",
+        "weight": "float",
+        "height": "float"
+    })
+
+    sex = metadata["subject_info"]["sex"]
+    weight = metadata["subject_info"]["weight"]   
+    height = metadata["subject_info"]["height"]
+
+    df.loc[len(df)] = [
+        sub_id, age, sex, "n/a", weight, height
+    ]     
+
+    return df
