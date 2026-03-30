@@ -331,7 +331,7 @@ class SimulationLogger(BaseMetadataLogger):
             url=muniverse_info["URL"],
             commit=muniverse_info["Commit"],
             branch=muniverse_info["Branch"],
-            file="muniverse/data_generation/generate_data.py",
+            file="src/muniverse/data_generation/generate_data.py",
             version= __version__,
             license= __license__, 
         )
@@ -397,7 +397,7 @@ class AlgorithmLogger(BaseMetadataLogger):
             url=muniverse_info["URL"],
             commit=muniverse_info["Commit"],
             branch=muniverse_info["Branch"],
-            file="muniverse/algorithms/decomposition.py",
+            file="src/muniverse/algorithms/decomposition.py",
             license=__license__,
         )
 
