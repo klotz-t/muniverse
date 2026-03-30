@@ -676,8 +676,23 @@ class bids_emg_recording(bids_dataset):
                 filename = self._get_bids_filename("channels.json") 
                 with open(filename, "w") as f:
                     json.dump(self.channels_sidecar, f, indent=4)
+        else:
+            warnings.warn(
+                "No channels metadata is provided." 
+                "However, *_channels.tsv is a REQUIRED EMG-BIDS file."
+            )
 
         filename = self._get_bids_filename("emg.json")
+        tmp = self._init_emg_sidecar(self.fsamp, 50)
+        keys = [
+            "EMGPlacementScheme", "EMGPlacementSchemeDescription", "EMGReference",
+            "SoftwareFilters", "RecordingType"
+        ]
+        for k in keys:
+            if k not in self.emg_sidecar:
+                warnings.warn(f"In *emg.json the REQUIRED field {k} is missing")
+            elif self.emg_sidecar[k] == tmp[k]:
+                warnings.warn(f"In *emg.json you are using field {k} from a placeholder template")
         with open(filename, "w") as f:
             json.dump(self.emg_sidecar, f, indent=4)
         
@@ -687,6 +702,11 @@ class bids_emg_recording(bids_dataset):
             # Coordinate systems metadata is only needed if the electrodes file exists
             filename = self._get_bids_filename("space")
             for name, metadata in self.coord_sidecar.items():
+                if name == "templateCoordSystemName":
+                    warnings.warn(
+                        "You are writing an arbitrary template coordinate system."
+                        "Make sure to update the coord_sidecar content correctly."
+                    )
                 filename2 = f"{filename}-{name}_coordsystem.json"
                 with open(filename2, "w") as f:
                     json.dump(metadata, f, indent=4)
@@ -708,6 +728,8 @@ class bids_emg_recording(bids_dataset):
                 sample_frequency=self.fsamp
             )
             write_edf(filename, self.emg_data, signal_headers)
+        else:
+            warnings.warn("Your emg_data field is empty.")
 
         # Write events.tsv and sidecar
         if len(self.events) > 0:
