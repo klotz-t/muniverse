@@ -86,11 +86,13 @@ def decompose_recording(
                 )
 
             # Load data into numpy array
-            if data_path.suffix == ".edf":
-                from edfio import read_edf
-                raw = read_edf(data_path)
-                n_channels = raw.num_signals
-                data = np.stack([raw.signals[i].data for i in range(n_channels)])
+            if data_path.suffix in [".edf", ".bdf", ".edf+", ".bdf+"]:
+                #from edfio import read_edf
+                #raw = read_edf(data_path)
+                #n_channels = raw.num_signals
+                #data = np.stack([raw.signals[i].data for i in range(n_channels)])
+                from pyedflib.highlevel import read_edf
+                data = read_edf(data_path)
             else:  # .npy
                 data = np.load(data_path)
         
@@ -118,12 +120,13 @@ def decompose_recording(
                 )
 
             # Load data into numpy array
-            if data_path.suffix == ".edf":
-                from edfio import read_edf
-
-                raw = read_edf(data_path)
-                n_channels = raw.num_signals
-                data = np.stack([raw.signals[i].data for i in range(n_channels)])
+            if data_path.suffix in [".edf", ".bdf", ".edf+", ".bdf+"]:
+                #from edfio import read_edf
+                #raw = read_edf(data_path)
+                #n_channels = raw.num_signals
+                #data = np.stack([raw.signals[i].data for i in range(n_channels)])
+                from pyedflib.highlevel import read_edf
+                data = read_edf(data_path)
             else:  # .npy
                 data = np.load(data_path)
 
