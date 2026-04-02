@@ -587,16 +587,16 @@ def peel_off(sig, spikes, win=0.02, fsamp=2048):
     waveform_padded = np.pad(waveform, ((0, 0), (0, pad_len)), mode="constant")
 
     # FFT of firings (same for all channels)
-    fft_firings = fft(firings)
+    fft_firings = rfft(firings)
 
     # FFT of waveform for each channel
-    fft_waveform = fft(waveform_padded, axis=1)
+    fft_waveform = rfft(waveform_padded, axis=1)
 
     # Multiply in frequency domain (broadcasting firings to each channel)
     fft_product = fft_waveform * fft_firings
 
     # IFFT to get time domain component signal
-    comp_sig = np.real(ifft(fft_product, axis=1))
+    comp_sig = irfft(fft_product, n=L, axis=1)
 
     # Correct time shift due to FFT convolution (center of kernel)
     shift = (waveform.shape[1] - 1) // 2
