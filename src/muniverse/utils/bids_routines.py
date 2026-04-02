@@ -30,7 +30,7 @@ class bids_dataset:
             "BIDSVersion": self._get_bids_version(),
             "DatasetType": "raw",
             "License": "The license for the dataset.",
-            "Authors": ["Author 1", "Author 2", "..."]
+            "Authors": ["LastName, FirstName", "LastName2, FirstName2", "..."]
         }
         self.readme = """# Some BIDS Dataset
 
@@ -1487,21 +1487,3 @@ def run_bids_validator(
     valid = True if len(errors) == 0 else False    
 
     return errors, warnings, valid
-
-#def edf_to_numpy(edf_data, idx):
-#    """
-#    Output data of selcetd channels as numpy array
-#
-#    Args:
-#        edf_data (edf): Time series data in edf format
-#        idx (ndarray): Indices of the channels to be stored
-#
-#    Returns:
-#        np_data (np.ndarray): Time series data
-#    """
-#
-#    np_data = np.zeros((edf_data.signals[idx[0]].data.shape[0], len(idx)))
-#    for i in np.arange(len(idx)):
-#        np_data[:, i] = edf_data.signals[idx[i]].data
-#
-#    return np_data
