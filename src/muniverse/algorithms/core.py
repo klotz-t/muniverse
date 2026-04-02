@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from scipy.fft import rfft, irfft, rfftfreq
 from scipy.linalg import toeplitz
-from scipy.signal import butter, filtfilt, find_peaks, firwin2
+from scipy.signal import butter, filtfilt, find_peaks, firwin2, iirnotch
 from scipy.stats import zscore
 from sklearn.cluster import KMeans
 
@@ -56,6 +56,7 @@ def notch_signals(emg_data,
                   dfreq=1,
                   ftype="butter", 
                   order = 2, 
+                  Q = 20,
                   n_harmonics = 3,
 
     ):
@@ -67,8 +68,9 @@ def notch_signals(emg_data,
         fsamp (float): Sampling frequency
         nfreq (list): List of frequencies to be filtered
         dfreq (float): width of the notch filter (plus/minus dfreq)
-        ftype (string): Filter type (butter, spectral_nulling, spectral_interpolation)
-        order (int): Order of the filter
+        ftype (string): Filter type (butter, iirnotch, spectral_nulling, spectral_interpolation)
+        order (int): Order of the filter (if type = butter)
+        Q (int): Quality factor (if type == iirnotch)
         n_harmonics (int): Number of harmonics to be filtered
 
     Returns:
@@ -95,6 +97,11 @@ def notch_signals(emg_data,
             )
             emg_data = filtfilt(b, a, emg_data, axis=1)
 
+    elif ftype == "iirnotch":
+        for f0 in freq_list:
+            b, a = iirnotch(f0, Q, fsamp)
+            emg_data = filtfilt(b, a, emg_data, axis=1)        
+
     elif ftype == "spectral_nulling":
         N = emg_data.shape[1]
 
@@ -117,9 +124,10 @@ def notch_signals(emg_data,
         spectrum = rfft(emg_data, axis=1)
         freqs = rfftfreq(N, d=1/fsamp)
 
+        eps = 1e-12  # avoid log(0)
+
         for f0 in freq_list:
 
-            # Create notch mask (1D)
             mask = np.abs(freqs - f0) <= dfreq
             idx = np.where(mask)[0]
 
@@ -127,24 +135,53 @@ def notch_signals(emg_data,
                 continue
 
             left = idx[0] - 1
-            right = idx[-1] + 1 
+            right = idx[-1] + 1
 
             # Handle edge cases
             if left < 0 or right >= len(freqs):
                 continue
-    
-            # vectorized interpolation across ALL channels
-            left_vals = spectrum[:, left]    # shape (n_channels, )
-            right_vals = spectrum[:, right]  # shape (n_channels, )
 
-            spectrum[:, idx] = np.linspace(
-                left_vals,
-                right_vals,
+            # --- magnitude & phase ---
+            mag = np.abs(spectrum)
+            phase = np.angle(spectrum)
+
+            # log-magnitude
+            log_mag = np.log(mag + eps)
+
+            # values at boundaries
+            left_log = log_mag[:, left]   # (channels, 1)
+            right_log = log_mag[:, right]
+
+            # interpolate in log space
+            interp_log = np.linspace(
+                left_log,
+                right_log,
                 len(idx),
                 axis=1
             )
 
-        emg_data = irfft(spectrum, n=N, axis=1)    
+            interp_mag = np.exp(interp_log)
+
+            # --- phase handling (stable) ---
+            # use average phase from edges (avoids phase jumps)
+            left_phase = phase[:, left]
+            right_phase = phase[:, right]
+
+            # unwrap phase to avoid discontinuities
+            phase_pair = np.stack([left_phase, right_phase], axis=1)
+            phase_pair = np.unwrap(phase_pair, axis=1)
+
+            interp_phase = np.linspace(
+                phase_pair[:, 0],
+                phase_pair[:, 1],
+                len(idx),
+                axis=1
+            )
+
+            # --- reconstruct spectrum ---
+            spectrum[:, idx] = interp_mag * np.exp(1j * interp_phase)
+
+        emg_data = irfft(spectrum, n=N, axis=1)
 
     else:
         raise ValueError(
