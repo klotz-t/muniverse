@@ -65,7 +65,7 @@ def notch_signals(emg_data,
     Args:
         emg_data (ndarray): emg data (n_channels x n_samples)
         fsamp (float): Sampling frequency
-        nfreq (float): List of frequencies to be filtered
+        nfreq (list): List of frequencies to be filtered
         dfreq (float): width of the notch filter (plus/minus dfreq)
         ftype (string): Filter type (butter, spectral_nulling, spectral_interpolation)
         order (int): Order of the filter
@@ -74,6 +74,9 @@ def notch_signals(emg_data,
     Returns:
         ndarray : filtered emg data (n_channels x n_samples)
     """
+
+    if isinstance(nfreq, float) or isinstance(nfreq, int):
+        nfreq = [nfreq]
 
     freq_list = np.empty([0])
     for i in range(len(nfreq)):
@@ -131,8 +134,8 @@ def notch_signals(emg_data,
                 continue
     
             # vectorized interpolation across ALL channels
-            left_vals = spectrum[:, left][:, None]    # shape (n_channels, 1)
-            right_vals = spectrum[:, right][:, None]  # shape (n_channels, 1)
+            left_vals = spectrum[:, left]    # shape (n_channels, )
+            right_vals = spectrum[:, right]  # shape (n_channels, )
 
             spectrum[:, idx] = np.linspace(
                 left_vals,
@@ -144,7 +147,10 @@ def notch_signals(emg_data,
         emg_data = irfft(spectrum, n=N, axis=1)    
 
     else:
-        raise ValueError(f"The specified filter type option {ftype} is invalid")
+        raise ValueError(
+            f"The specified filter type option {ftype} is invalid"
+            "Valid options are *butter*, *spectral_nulling* or *spectral_interpolation*"                      
+        )
 
     return emg_data
 
