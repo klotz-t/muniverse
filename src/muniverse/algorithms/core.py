@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from scipy.fft import fft, ifft, rfft, irfft, rfftfreq
+from scipy.fft import rfft, irfft, rfftfreq
 from scipy.linalg import toeplitz
 from scipy.signal import butter, filtfilt, find_peaks, firwin2
 from scipy.stats import zscore
@@ -398,7 +398,7 @@ def remove_duplicates(
 ):
     """
     Sort out source duplicates from a decomposition by clustering spike trains and
-    only keeping for each unique label the source with the highest spike sources
+    only keeping for each unique label the source with the highest quality score
 
     Args:
         - sources (np.ndarray): Original sources (n_mu x n_samples)
@@ -503,34 +503,6 @@ def remove_bad_sources(
 
     return new_sources, new_spikes, new_sil, new_filters
 
-
-def map_source_from_window_to_global_time_idx(sources, spikes, win, n_time_samples):
-    """
-    TODO some description
-
-    Args:
-        sources (np.ndarray): Original sources
-        spikes (dict): Original spikes
-        win (tuple): Time indices of the window (start, end)
-        n_time_samples (int): Number of time samples of the original recording
-
-    Returns:
-        new_sources (np.ndarray): Mapped sources
-        spikes (float): (dict): Mapped spikes
-
-    """
-
-    # Initalize variables
-    new_sources = np.zeros((sources.shape[0], n_time_samples))
-    new_spikes = {i: [] for i in range(sources.shape[0])}
-
-    for i in range(new_sources.shape[0]):
-        new_sources[i, win[0] : win[1]] = sources[i, :]
-        new_spikes[i] = spikes[i] + win[0]
-
-    return new_sources, new_spikes
-
-
 def spike_triggered_average(sig, spikes, win=0.02, fsamp=2048):
     """
     Calculate the spike triggered average given the spike times of a source
@@ -607,30 +579,39 @@ def peel_off(sig, spikes, win=0.02, fsamp=2048):
     return residual_sig, comp_sig, waveform
 
 
-def spike_dict_to_long_df(spike_dict, sort=True, fsamp=2048):
+def spike_dict_to_long_df(spike_dict, fsamp=2048):
     """
     Convert a dictionary of spike instances into a long-formatted DataFrame.
 
     Parameters:
-        spike_dict (dict): Keys are unit IDs, values are lists or arrays of spike times.
-        sort (bool): Whether to sort the result by unit and spike time.
+        spike_dict (dict): Key: unit_id; Value: array of spike indices
         fsamp (float): Sampling frequency to convert sample indices to time.
 
     Returns:
-        pd.DataFrame: Long-formatted DataFrame with columns ['source_id', 'spike_time']
+        pd.DataFrame: Long-formatted DataFrame (BIDS-events style)
     """
-    import pandas as pd
+
+    columns = ["onset", "duration", "sample", "unit_id", "description"]
 
     rows = []
     for unit_id, spikes in spike_dict.items():
         for t in spikes:
-            rows.append({"source_id": unit_id, "spike_time": t / fsamp})
+            rows.append({
+                "onset": t / fsamp,
+                "duration": 0,
+                "sample": t,
+                "unit_id": unit_id, 
+                "description": "motor-unit-spike"
+            })
 
-    # If no spikes were found, create an empty DataFrame with the correct columns
+    # If no spikes were found, create an empty DataFrame 
     if not rows:
-        return pd.DataFrame(columns=["source_id", "spike_time"])
+        df = pd.DataFrame(columns=columns)
+    else:
+        df = pd.DataFrame(rows)
 
-    df = pd.DataFrame(rows)
-    if sort and not df.empty:
-        df = df.sort_values(by=["source_id", "spike_time"]).reset_index(drop=True)
+    # Drop dublicates and sort by onset
+    df = df.drop_duplicates(subset=["onset", "unit_id", "sample"])
+    df = df.sort_values(by=["onset"])
+
     return df
