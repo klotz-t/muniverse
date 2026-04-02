@@ -2,13 +2,21 @@ import numpy as np
 import pandas as pd
 from scipy.fft import fft, ifft, rfft, irfft, rfftfreq
 from scipy.linalg import toeplitz
-from scipy.signal import butter, filtfilt, iirnotch, find_peaks, firwin2
+from scipy.signal import butter, filtfilt, find_peaks, firwin2
+from scipy.stats import zscore
 from sklearn.cluster import KMeans
 
 from ..evaluation.evaluate import *
 
 
-def bandpass_signals(emg_data, fsamp, high_pass=20, low_pass=500, order=2, ftype="butter"):
+def bandpass_signals(emg_data, 
+                     fsamp, 
+                     high_pass=20, 
+                     low_pass=500, 
+                     ftype="butter",
+                     order=2, 
+                     numtabs=101,
+):
     """
     Bandpass filter emg data
 
@@ -17,8 +25,9 @@ def bandpass_signals(emg_data, fsamp, high_pass=20, low_pass=500, order=2, ftype
         fsamp (float): Sampling frequency
         low_pass (float): Cut-off frequency for the low-pass filter
         high_pass (float): Cut-off frequency for the high-pass filter
-        order (int): Order of the filter (butter) or number of filter tabs (firwin2)
-        ftype (string): Filter type (butter, firwin2)
+        ftype (string): Filter type (butter or firwin2)
+        order (int): Order of the filter (butter) 
+        numtabs (int): Number of filter tabs (firwin2)
 
     Returns:
         ndarray : filtered emg data (n_channels x n_samples)
@@ -33,7 +42,7 @@ def bandpass_signals(emg_data, fsamp, high_pass=20, low_pass=500, order=2, ftype
         f = [0, high_pass*0.9, high_pass, low_pass, low_pass*1.1, nyq]  # small transition bands
         m = [0, 0, 1, 1, 0, 0]  # 0 outside band, 1 inside
         # Design FIR filter
-        fir_coeff = firwin2(order, f, m, fs=fsamp)
+        fir_coeff = firwin2(numtabs, f, m, fs=fsamp)
         emg_data = filtfilt(fir_coeff, [1.0], emg_data, axis=1)
     else:
         raise ValueError(f"The specified filter type option {ftype} is invalid")
@@ -41,67 +50,143 @@ def bandpass_signals(emg_data, fsamp, high_pass=20, low_pass=500, order=2, ftype
     return emg_data
 
 
-def notch_signals(emg_data, fsamp, nfreq=50, dfreq=1, order=2, n_harmonics=3, ftype="butter"):
+def notch_signals(emg_data, 
+                  fsamp, 
+                  nfreq=[50], 
+                  dfreq=1,
+                  ftype="butter", 
+                  order = 2, 
+                  n_harmonics = 3,
+
+    ):
     """
     Notch filter emg data
 
     Args:
         emg_data (ndarray): emg data (n_channels x n_samples)
         fsamp (float): Sampling frequency
-        nfreq (float): frequency to be filtered
+        nfreq (float): List of frequencies to be filtered
         dfreq (float): width of the notch filter (plus/minus dfreq)
+        ftype (string): Filter type (butter, spectral_nulling, spectral_interpolation)
         order (int): Order of the filter
         n_harmonics (int): Number of harmonics to be filtered
-        ftype (string): Filter type (butter, fft, iirnotch)
 
     Returns:
         ndarray : filtered emg data (n_channels x n_samples)
     """
 
-    harmonics = nfreq * np.arange(1, n_harmonics + 1)
+    freq_list = np.empty([0])
+    for i in range(len(nfreq)):
+        freq_list = np.append(
+            freq_list, nfreq[i] * np.arange(1, n_harmonics + 1)
+        )
 
     if ftype == "butter":
 
-        for i in np.arange(n_harmonics):
+        for f0 in freq_list:
             b, a = butter(
                 order,
-                [harmonics[i] - dfreq, harmonics[i] + dfreq],
+                [f0 - dfreq, f0 + dfreq],
                 fs=fsamp,
                 btype="bandstop",
             )
             emg_data = filtfilt(b, a, emg_data, axis=1)
 
-    elif ftype == "fft":
+    elif ftype == "spectral_nulling":
         N = emg_data.shape[1]
 
         spectrum = rfft(emg_data, axis=1)
         freqs = rfftfreq(N, d=1/fsamp)
 
-        for i in np.arange(n_harmonics):
-            # Gaussian notch (1D over frequency)
-            #gaussian = np.exp(-0.5 * ((freqs - harmonics[i]) / dfreq)**2)
-            # Convert to attenuation profile (1 - gaussian dip)
-            #attenuation = 1 - gaussian
-            # Broadcast across channels
-            #spectrum *= attenuation[np.newaxis, :]
+        for f0 in freq_list:
 
             # Create notch mask (1D)
-            mask = np.abs(freqs - harmonics[i]) <= dfreq
+            mask = np.abs(freqs - f0) <= dfreq
     
             # Broadcast mask across channels
             spectrum[:, mask] = 0
 
         emg_data = irfft(spectrum, n=N, axis=1)
 
-    elif ftype == "iirnotch":
-        for i in np.arange(n_harmonics):
-            b, a = iirnotch(harmonics[i], order, fsamp)
-            emg_data = filtfilt(b, a, emg_data, axis=1)
+    elif ftype == "spectral_interpolation":
+        N = emg_data.shape[1]
+
+        spectrum = rfft(emg_data, axis=1)
+        freqs = rfftfreq(N, d=1/fsamp)
+
+        for f0 in freq_list:
+
+            # Create notch mask (1D)
+            mask = np.abs(freqs - f0) <= dfreq
+            idx = np.where(mask)[0]
+
+            if len(idx) == 0:
+                continue
+
+            left = idx[0] - 1
+            right = idx[-1] + 1 
+
+            # Handle edge cases
+            if left < 0 or right >= len(freqs):
+                continue
+    
+            # vectorized interpolation across ALL channels
+            left_vals = spectrum[:, left][:, None]    # shape (n_channels, 1)
+            right_vals = spectrum[:, right][:, None]  # shape (n_channels, 1)
+
+            spectrum[:, idx] = np.linspace(
+                left_vals,
+                right_vals,
+                len(idx),
+                axis=1
+            )
+
+        emg_data = irfft(spectrum, n=N, axis=1)    
 
     else:
         raise ValueError(f"The specified filter type option {ftype} is invalid")
 
     return emg_data
+
+def find_outliers(x, threshold=3, max_iter=3, tail=0):
+    """
+    Detect ouliers by comparing the z-score of variable x against
+    some threshold. This is repeaded until there are no outliers or
+    the maximum number of iterations is reached. 
+
+    Args:
+        x (np.array): Variable to test for outliers
+        threshold (float): Threshold for outlier detection
+        max_iter (int): Maximum number of iterations
+        tail {-1,0,1}: Specify weather to serach for outliers   
+            on both ends (0), just on the positive (1) or just 
+            the negative side (-1).
+
+    Return:
+        bad_idx (np.array): List of bad channels (integer index) 
+        
+    """
+
+    mask = np.zeros(len(x), dtype=bool)
+
+    iter = 0
+    while iter < max_iter:
+        xm = np.ma.masked_array(x, mask=mask)
+        if tail == 1:
+            idx = zscore(xm) > threshold
+        elif tail == -1:
+            idx = -zscore(xm) > threshold
+        else:
+            idx = np.abs(zscore(xm)) > threshold 
+        mask = mask + idx
+        if not np.any(idx):
+            break
+        else:
+            iter = iter + 1
+
+    bad_idx = np.where(mask)[0]    
+
+    return bad_idx  
 
 
 def reject_bad_channels(data, bad_channels):
