@@ -53,10 +53,9 @@ def bandpass_signals(emg_data,
 def notch_signals(emg_data, 
                   fsamp, 
                   nfreq=[50], 
-                  dfreq=1,
                   ftype="butter", 
                   order = 2, 
-                  Q = 20,
+                  dfreq=1,
                   n_harmonics = 3,
 
     ):
@@ -67,10 +66,9 @@ def notch_signals(emg_data,
         emg_data (ndarray): emg data (n_channels x n_samples)
         fsamp (float): Sampling frequency
         nfreq (list): List of frequencies to be filtered
-        dfreq (float): width of the notch filter (plus/minus dfreq)
-        ftype (string): Filter type (butter, iirnotch, spectral_nulling, spectral_interpolation)
+        ftype (string): Filter type (butter, iirnotch, fft_nulling, fft_interpolation)
         order (int): Order of the filter (if type = butter)
-        Q (int): Quality factor (if type == iirnotch)
+        dfreq (float): width of the notch filter (plus/minus dfreq) (if iirnotch, fft_nulling, fft_interpolation)
         n_harmonics (int): Number of harmonics to be filtered
 
     Returns:
@@ -99,10 +97,10 @@ def notch_signals(emg_data,
 
     elif ftype == "iirnotch":
         for f0 in freq_list:
-            b, a = iirnotch(f0, Q, fsamp)
+            b, a = iirnotch(f0, f0/(2*dfreq), fsamp)
             emg_data = filtfilt(b, a, emg_data, axis=1)        
 
-    elif ftype == "spectral_nulling":
+    elif ftype == "fft_nulling":
         N = emg_data.shape[1]
 
         spectrum = rfft(emg_data, axis=1)
@@ -118,7 +116,7 @@ def notch_signals(emg_data,
 
         emg_data = irfft(spectrum, n=N, axis=1)
 
-    elif ftype == "spectral_interpolation":
+    elif ftype == "fft_interpolation":
         N = emg_data.shape[1]
 
         spectrum = rfft(emg_data, axis=1)
@@ -141,7 +139,7 @@ def notch_signals(emg_data,
             if left < 0 or right >= len(freqs):
                 continue
 
-            # --- magnitude & phase ---
+            # magnitude and phase ---
             mag = np.abs(spectrum)
             phase = np.angle(spectrum)
 
@@ -159,10 +157,9 @@ def notch_signals(emg_data,
                 len(idx),
                 axis=1
             )
-
+            # transform to back to magnitude space
             interp_mag = np.exp(interp_log)
 
-            # --- phase handling (stable) ---
             # use average phase from edges (avoids phase jumps)
             left_phase = phase[:, left]
             right_phase = phase[:, right]
@@ -178,7 +175,7 @@ def notch_signals(emg_data,
                 axis=1
             )
 
-            # --- reconstruct spectrum ---
+            # reconstruct spectrum
             spectrum[:, idx] = interp_mag * np.exp(1j * interp_phase)
 
         emg_data = irfft(spectrum, n=N, axis=1)
@@ -186,7 +183,7 @@ def notch_signals(emg_data,
     else:
         raise ValueError(
             f"The specified filter type option {ftype} is invalid"
-            "Valid options are *butter*, *spectral_nulling* or *spectral_interpolation*"                      
+            "Valid options are *butter*, *iirnotch*, *fft_nulling* or *fft_interpolation*"                      
         )
 
     return emg_data
