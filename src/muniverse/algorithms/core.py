@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from typing import List, Literal, Optional
 from scipy.fft import rfft, irfft, rfftfreq
 from scipy.linalg import toeplitz
 from scipy.signal import butter, filtfilt, find_peaks, firwin2, iirnotch
@@ -9,70 +10,85 @@ from sklearn.cluster import KMeans
 from ..evaluation.evaluate import *
 
 
-def bandpass_signals(emg_data: np.ndarray, 
+def bandpass_signals(data: np.ndarray, # (n_channels x n_samples)
                      fsamp: float, 
                      high_pass: float = 20, 
                      low_pass: float = 500, 
-                     method: str = "butter",
-                     order: int = 2, 
-                     numtabs: int = 101,
+                     method: Literal["butter", "firwin2"] = "butter",
+                     order: int | None = 2, 
+                     numtabs: int | None = 101,
 ) -> np.ndarray:
     """
-    Bandpass filter emg data
+    Bandpass filter timeseries data
 
     Args:
-        emg_data (np.ndarray): emg data (n_channels x n_samples)
+        data (np.ndarray): data (n_channels x n_samples)
         fsamp (float): Sampling frequency
         low_pass (float): Cut-off frequency for the low-pass filter
         high_pass (float): Cut-off frequency for the high-pass filter
-        ftype (str): Filter type (butter or firwin2)
-        order (int): Order of the filter (butter) 
-        numtabs (int): Number of filter tabs (firwin2)
+        method (str): Filter type (butter or firwin2)
+        order (int | None): Order of the filter (required for butter) 
+        numtabs (int | None): Number of filter tabs (required for firwin2)
 
     Returns:
-        np.ndarray : filtered emg data (n_channels x n_samples)
+        np.ndarray : filtered data (n_channels x n_samples)
     """
 
+    if high_pass >= low_pass:
+        raise ValueError(
+            "The value of low_pass must be larger than your high_pass value."
+        )
+
     if method == "butter":
+        if order is None:
+            raise ValueError(
+                "If method is *butter*, order must be an integer."
+            )
         b, a = butter(order, [high_pass, low_pass], fs=fsamp, btype="band")
-        emg_data = filtfilt(b, a, emg_data, axis=1)
+        data = filtfilt(b, a, data, axis=1)
     elif method == "firwin2":
+        if numtabs is None:
+            raise ValueError(
+                "If method is *firwin2*, numtabs must be an integer."
+            )
         # Normalize frequencies to Nyquist (0..1)
         nyq = fsamp / 2
         f = [0, high_pass*0.9, high_pass, low_pass, low_pass*1.1, nyq]  # small transition bands
         m = [0, 0, 1, 1, 0, 0]  # 0 outside band, 1 inside
         # Design FIR filter
         fir_coeff = firwin2(numtabs, f, m, fs=fsamp)
-        emg_data = filtfilt(fir_coeff, [1.0], emg_data, axis=1)
+        data = filtfilt(fir_coeff, [1.0], data, axis=1)
     else:
         raise ValueError(
             f"The specified filter type option *{method}* is invalid"
             "Must be one of *butter* or *firwin2*"
         )
 
-    return emg_data
+    return data
 
 
-def notch_signals(emg_data: np.ndarray, 
+def notch_signals(data: np.ndarray, 
                   fsamp: float, 
-                  freqs: list[float] = [50, 100, 150], 
-                  method: str = "butter", 
-                  order: int = 2, 
-                  dfreq: float = 1,
+                  freqs: List[float] = [50, 100, 150], 
+                  method: Literal[
+                      "butter", "iirnotch", "fft_nulling", "fft_interpolation"
+                  ] = "butter", 
+                  order: int | None = 2, 
+                  dfreq: int | None = 1,
     ) -> np.ndarray:
     """
-    Notch filter emg data
+    Notch filter time series data
 
     Args:
-        emg_data (np.ndarray): emg data (n_channels x n_samples)
+        emg_data (np.ndarray): Time series data (n_channels x n_samples)
         fsamp (float): Sampling frequency
         freqs (list[float]): List of frequencies to be filtered
-        method (str): Filter type (butter, iirnotch, fft_nulling, fft_interpolation)
-        order (int): Order of the filter (if type = butter)
-        dfreq (float): width of the notch filter (plus/minus dfreq) (if iirnotch, fft_nulling, fft_interpolation)
+        method (str): Filter type (one of butter, iirnotch, fft_nulling, fft_interpolation)
+        order (int): Order of the filter (if method is butter)
+        dfreq (float): Width of the notch filter (plus/minus dfreq) (if method is iirnotch, fft_nulling, fft_interpolation)
 
     Returns:
-        np.ndarray : filtered emg data (n_channels x n_samples)
+        np.ndarray : Filtered time series data (n_channels x n_samples)
     """
 
     if isinstance(freqs, float) or isinstance(freqs, int):
@@ -87,17 +103,17 @@ def notch_signals(emg_data: np.ndarray,
                 fs=fsamp,
                 btype="bandstop",
             )
-            emg_data = filtfilt(b, a, emg_data, axis=1)
+            data = filtfilt(b, a, data, axis=1)
 
     elif method == "iirnotch":
         for f0 in freqs:
             b, a = iirnotch(f0, f0/(2*dfreq), fsamp)
-            emg_data = filtfilt(b, a, emg_data, axis=1)        
+            data = filtfilt(b, a, data, axis=1)        
 
     elif method == "fft_nulling":
-        N = emg_data.shape[1]
+        N = data.shape[1]
 
-        spectrum = rfft(emg_data, axis=1)
+        spectrum = rfft(data, axis=1)
         fft_freqs = rfftfreq(N, d=1/fsamp)
 
         for f0 in freqs:
@@ -108,12 +124,12 @@ def notch_signals(emg_data: np.ndarray,
             # Broadcast mask across channels
             spectrum[:, mask] = 0
 
-        emg_data = irfft(spectrum, n=N, axis=1)
+        data = irfft(spectrum, n=N, axis=1)
 
     elif method == "fft_interpolation":
-        N = emg_data.shape[1]
+        N = data.shape[1]
 
-        spectrum = rfft(emg_data, axis=1)
+        spectrum = rfft(data, axis=1)
         fft_freqs = rfftfreq(N, d=1/fsamp)
 
         eps = 1e-12  # avoid log(0)
@@ -172,7 +188,7 @@ def notch_signals(emg_data: np.ndarray,
             # reconstruct spectrum
             spectrum[:, idx] = interp_mag * np.exp(1j * interp_phase)
 
-        emg_data = irfft(spectrum, n=N, axis=1)
+        data = irfft(spectrum, n=N, axis=1)
 
     else:
         raise ValueError(
@@ -180,7 +196,7 @@ def notch_signals(emg_data: np.ndarray,
             "Valid options are *butter*, *iirnotch*, *fft_nulling* or *fft_interpolation*"                      
         )
 
-    return emg_data
+    return data
 
 def find_outliers(x, threshold=3, max_iter=3, tail=0):
     """
@@ -243,17 +259,19 @@ def reject_bad_channels(data, bad_channels):
     return data, mask
 
 
-def extension(Y, R):
+def extension(Y: np.ndarray, # (n_channels x n_samples)
+              R: int
+) -> np.ndarray:
     """
     Extend a multi-channel signal Y by an extension factor R
     using Toeplitz matrices.
 
     Parameters:
-        Y (ndarray): Original signal (n_channels x n_samples)
+        Y (np.ndarray): Original signal (n_channels x n_samples)
         R (int): Extension factor (number of lags)
 
     Returns:
-        eY (ndarray): Extended signal (n_channels * R x n_samples)
+        eY (np.ndarray): Extended signal (n_channels x (R * n_samples))
     """
     n_channels, n_samples = Y.shape
     eY = np.zeros((n_channels * R, n_samples))
@@ -267,20 +285,25 @@ def extension(Y, R):
     return eY
 
 
-def whitening(Y, method="ZCA", backend="ed", regularization="auto", eps=1e-10):
+def whitening(Y: np.ndarray, # (n_channels x n_samples)
+              method: Literal["ZCA", "PCA", "Cholesky"] = "ZCA", 
+              backend: Literal["ed", "svd"] = "ed", 
+              regularization: str | float | None = "auto", 
+              eps: Optional[float] = 1e-10
+):
     """
     Adaptive whitening function using ZCA, PCA, or Cholesky.
 
     Parameters:
         Y (ndarray): Input signal (n_channels x n_samples)
-        method (str): Whitening method: 'ZCA', 'PCA', 'Cholesky'
-        backend (str): 'ed', or 'svd'
-        regularization (str or float): 'auto', float value, or None
+        method ("ZCA", "PCA" or "Cholesky"): Whitening method 
+        backend ("ed" or "svd"): Method used to calculate eigenvalues and eigenvectors
+        regularization ("auto", float or None): 'auto', float value, or None
         eps (float): Small epsilon for numerical stability
 
     Returns:
-        wY (ndarray): Whitened signal
-        Z (ndarray): Whitening matrix
+        wY (np.ndarray): Whitened signal (n_channels x n_samples)
+        Z (np.ndarray): Whitening matrix (n_channels x n_channels)
     """
     n_channels, n_samples = Y.shape
     use_svd = backend == "svd"
@@ -350,6 +373,7 @@ def est_spike_times(sig, fsamp, cluster="kmeans", a=2, min_delay=0.01):
 
     Returns:
         est_spikes (np.ndarray): Estimated spike indices
+        
         sil (float): Silhouette-like score (0 = poor, 1 = strong separation)
     """
     sig = np.asarray(sig)
