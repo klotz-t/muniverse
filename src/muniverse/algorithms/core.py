@@ -67,6 +67,84 @@ def bandpass_signals(data: np.ndarray, # (n_channels x n_samples)
     return data
 
 
+def highpass_signals(
+    data: np.ndarray,  # (n_channels x n_samples)
+    fsamp: float,
+    high_pass: float = 20,
+    method: Literal["butter", "firwin2"] = "butter",
+    order: int | None = 2,
+    numtabs: int | None = 101,
+) -> np.ndarray:
+    """
+    High-pass filter timeseries data.
+    """
+
+    if high_pass <= 0:
+        raise ValueError("high_pass must be > 0")
+
+    if method == "butter":
+        if order is None:
+            raise ValueError("order must be provided for butter")
+
+        b, a = butter(order, high_pass, fs=fsamp, btype="highpass")
+        data = filtfilt(b, a, data, axis=1)
+
+    elif method == "firwin2":
+        if numtabs is None:
+            raise ValueError("numtabs must be provided for firwin2")
+
+        nyq = fsamp / 2
+
+        f = [0, high_pass * 0.9, high_pass, nyq]
+        m = [0, 0, 1, 1]
+
+        fir_coeff = firwin2(numtabs, f, m, fs=fsamp)
+        data = filtfilt(fir_coeff, [1.0], data, axis=1)
+
+    else:
+        raise ValueError("method must be 'butter' or 'firwin2'")
+
+    return data
+
+def lowpass_signals(
+    data: np.ndarray,  # (n_channels x n_samples)
+    fsamp: float,
+    low_pass: float = 500,
+    method: Literal["butter", "firwin2"] = "butter",
+    order: int | None = 2,
+    numtabs: int | None = 101,
+) -> np.ndarray:
+    """
+    Low-pass filter timeseries data.
+    """
+
+    nyq = fsamp / 2
+
+    if low_pass <= 0 or low_pass >= nyq:
+        raise ValueError("low_pass must be between 0 and Nyquist frequency")
+
+    if method == "butter":
+        if order is None:
+            raise ValueError("order must be provided for butter")
+
+        b, a = butter(order, low_pass, fs=fsamp, btype="lowpass")
+        data = filtfilt(b, a, data, axis=1)
+
+    elif method == "firwin2":
+        if numtabs is None:
+            raise ValueError("numtabs must be provided for firwin2")
+
+        f = [0, low_pass, low_pass * 1.1, nyq]
+        m = [1, 1, 0, 0]
+
+        fir_coeff = firwin2(numtabs, f, m, fs=fsamp)
+        data = filtfilt(fir_coeff, [1.0], data, axis=1)
+
+    else:
+        raise ValueError("method must be 'butter' or 'firwin2'")
+
+    return data
+
 def notch_signals(data: np.ndarray, 
                   fsamp: float, 
                   freqs: List[float] = [50, 100, 150], 
@@ -373,7 +451,6 @@ def est_spike_times(sig, fsamp, cluster="kmeans", a=2, min_delay=0.01):
 
     Returns:
         est_spikes (np.ndarray): Estimated spike indices
-        
         sil (float): Silhouette-like score (0 = poor, 1 = strong separation)
     """
     sig = np.asarray(sig)
