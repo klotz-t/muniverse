@@ -13,7 +13,7 @@ def bandpass_signals(emg_data,
                      fsamp, 
                      high_pass=20, 
                      low_pass=500, 
-                     ftype="butter",
+                     method="butter",
                      order=2, 
                      numtabs=101,
 ):
@@ -33,10 +33,10 @@ def bandpass_signals(emg_data,
         ndarray : filtered emg data (n_channels x n_samples)
     """
 
-    if ftype == "butter":
+    if method == "butter":
         b, a = butter(order, [high_pass, low_pass], fs=fsamp, btype="band")
         emg_data = filtfilt(b, a, emg_data, axis=1)
-    elif ftype == "firwin2":
+    elif method == "firwin2":
         # Normalize frequencies to Nyquist (0..1)
         nyq = fsamp / 2
         f = [0, high_pass*0.9, high_pass, low_pass, low_pass*1.1, nyq]  # small transition bands
@@ -52,12 +52,10 @@ def bandpass_signals(emg_data,
 
 def notch_signals(emg_data, 
                   fsamp, 
-                  nfreq=[50], 
-                  ftype="butter", 
+                  freqs=[50, 100, 150], 
+                  method="butter", 
                   order = 2, 
                   dfreq=1,
-                  n_harmonics = 3,
-
     ):
     """
     Notch filter emg data
@@ -75,18 +73,12 @@ def notch_signals(emg_data,
         ndarray : filtered emg data (n_channels x n_samples)
     """
 
-    if isinstance(nfreq, float) or isinstance(nfreq, int):
-        nfreq = [nfreq]
+    if isinstance(freqs, float) or isinstance(freqs, int):
+        freqs = [freqs]
 
-    freq_list = np.empty([0])
-    for i in range(len(nfreq)):
-        freq_list = np.append(
-            freq_list, nfreq[i] * np.arange(1, n_harmonics + 1)
-        )
+    if method == "butter":
 
-    if ftype == "butter":
-
-        for f0 in freq_list:
+        for f0 in freqs:
             b, a = butter(
                 order,
                 [f0 - dfreq, f0 + dfreq],
@@ -95,38 +87,38 @@ def notch_signals(emg_data,
             )
             emg_data = filtfilt(b, a, emg_data, axis=1)
 
-    elif ftype == "iirnotch":
-        for f0 in freq_list:
+    elif method == "iirnotch":
+        for f0 in freqs:
             b, a = iirnotch(f0, f0/(2*dfreq), fsamp)
             emg_data = filtfilt(b, a, emg_data, axis=1)        
 
-    elif ftype == "fft_nulling":
+    elif method == "fft_nulling":
         N = emg_data.shape[1]
 
         spectrum = rfft(emg_data, axis=1)
-        freqs = rfftfreq(N, d=1/fsamp)
+        fft_freqs = rfftfreq(N, d=1/fsamp)
 
-        for f0 in freq_list:
+        for f0 in freqs:
 
             # Create notch mask (1D)
-            mask = np.abs(freqs - f0) <= dfreq
+            mask = np.abs(fft_freqs - f0) <= dfreq
     
             # Broadcast mask across channels
             spectrum[:, mask] = 0
 
         emg_data = irfft(spectrum, n=N, axis=1)
 
-    elif ftype == "fft_interpolation":
+    elif method == "fft_interpolation":
         N = emg_data.shape[1]
 
         spectrum = rfft(emg_data, axis=1)
-        freqs = rfftfreq(N, d=1/fsamp)
+        fft_freqs = rfftfreq(N, d=1/fsamp)
 
         eps = 1e-12  # avoid log(0)
 
-        for f0 in freq_list:
+        for f0 in freqs:
 
-            mask = np.abs(freqs - f0) <= dfreq
+            mask = np.abs(fft_freqs - f0) <= dfreq
             idx = np.where(mask)[0]
 
             if len(idx) == 0:
@@ -136,7 +128,7 @@ def notch_signals(emg_data,
             right = idx[-1] + 1
 
             # Handle edge cases
-            if left < 0 or right >= len(freqs):
+            if left < 0 or right >= len(fft_freqs):
                 continue
 
             # magnitude and phase ---
@@ -147,7 +139,7 @@ def notch_signals(emg_data,
             log_mag = np.log(mag + eps)
 
             # values at boundaries
-            left_log = log_mag[:, left]   # (channels, 1)
+            left_log = log_mag[:, left]   
             right_log = log_mag[:, right]
 
             # interpolate in log space
@@ -182,7 +174,7 @@ def notch_signals(emg_data,
 
     else:
         raise ValueError(
-            f"The specified filter type option {ftype} is invalid"
+            f"The specified filter type option {method} is invalid"
             "Valid options are *butter*, *iirnotch*, *fft_nulling* or *fft_interpolation*"                      
         )
 
