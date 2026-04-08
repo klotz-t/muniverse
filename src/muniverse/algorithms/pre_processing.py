@@ -9,46 +9,142 @@ from .core import bandpass_signals, notch_signals, highpass_signals, lowpass_sig
 
 class pre_processing:
     """
-    Class to preproces HD-EMG data
+    Class to preprocess HD-EMG data.
+
+    Parameters
+    ----------
+    steps : list of dict
+        List of preprocessing steps. Each step is a dictionary describing
+        the processing operation.
+
+        Supported step types are:
+        "bandpass", "highpass", "lowpass", "notch",
+        "bad_channel_detection", "mask_channels", "downsample":
+
+        *Bandpass filter*::
+
+            {
+                "step": "bandpass",
+                "high_pass": float,
+                "low_pass": float,
+                "method": "butter" | "firwin2",
+                "order": int,      # if method == "butter"
+                "numtabs": int,    # if method == "firwin2"
+            }
+
+        *Highpass filter*::
+
+            {
+                "step": "highpass",
+                "high_pass": float,
+                "method": "butter" | "firwin2",
+                "order": int,
+                "numtabs": int,
+            }
+
+        *Lowpass filter*::
+
+            {
+                "step": "lowpass",
+                "low_pass": float,
+                "method": "butter" | "firwin2",
+                "order": int,
+                "numtabs": int,
+            }
+
+        *Notch filter*::
+
+            {
+                "step": "notch",
+                "freqs": list[float],
+                "method": "butter" | "iirnotch" | "fft_nulling" | "fft_interpolation",
+                "order": int,   # if "butter"
+                "dfreq": float  # if "iirnotch", "fft_nulling" or "fft_interpolation"
+            }
+
+        **Bad Channel Detection**: Automatically detect bad channels based on some metric ("std" or "rms").
+        If method is "zscore" the score distribution is normalized (zero mean, unit standard deviation). 
+        All scores are compared to a "threshold_value". If tail=1 all values above the threshold are rejected,
+        if tail=-1 all values below the theshold are rejected. For tail=0 all the absolute value of the score
+        is computed and all values above the threshold are rejected (only availible if "method" == "zscore")::  
+
+            {
+                "step": "bad_channel_detection",
+                "metric": Literal["std", "rms"],
+                "method": "zscore" | "threshold",
+                "threshold_value": float,
+                "tail": -1 | 0 | 1
+            } 
+
+        **Mask Channels**: Mask all channels given in "channel_list" to be excluded in the following. 
+        Can be either used to reject known bad channels or limit the analysis to a subset of your data::  
+
+            {
+                "step": "mask_channels",
+                "channel_list": list[int]
+            }
+
+        **Downsample**: Reduces the sampling frequency by the specified value::  
+
+            {
+                "step": "downsample",
+                "factor": int 
+            }
+
+        **Time window**: Truncate your signal to only consider a selected time window.
+        If t_end = -1 the time window ends with the last sample::  
+
+            {
+                "step": "time_window",
+                "t_start": float,
+                "t_end": float 
+            }    
+
+    Examples:
+    ---------
+    Pre process HD-EMG data using a bandpass and a notch filter.
+    >>> model = pre_processing(steps = [
+    >>>     {
+    >>>         "step": "bandpass",
+    >>>         "high_pass": 20,
+    >>>         "low_pass": 500,
+    >>>         "method": "butter",
+    >>>         "order": 2
+    >>>     },
+    >>>     {
+    >>>         "step": "notch",
+    >>>         "freqs": [50, 100, 150],
+    >>>         "method": "butter",
+    >>>         "order": 2
+    >>>     },
+    >>> ])
+    >>> preprocessed_data, metadata = model.pre_process(data=emg_data, fsamp=2048)                     
 
     """
 
-    def __init__(self, 
-                 pre_process_steps: list = [
-                    {
-                        "step": "bad_channel_detection",
-                        "metric": "std",
-                        "method": "zscore",
-                        "threshold_value": 3,
-                        "tail": 0,
-                    },
-                    {
-                        "step": "bad_channel_detection",
-                        "metric": "rms",
-                        "method": "threshold",
-                        "threshold_value": 1e-6, 
-                        "tail": -1,
-                    },
-                    {  
-                        "step": "bandpass",
-                        "high_pass": 20,
-                        "low_pass": 500,
-                        "method": "butter",
-                        "order": 2,
-                    },
-                    {
-                        "step": "notch",
-                        "freqs": [50, 100, 150],
-                        "method": "butter",
-                        "order": 2
-                    }    
-                 ]          
+    def __init__(
+            self, 
+            steps: list[dict] = [
+                {  
+                    "step": "bandpass",
+                    "high_pass": 20,
+                    "low_pass": 500,
+                    "method": "butter",
+                    "order": 2,
+                },
+                {
+                    "step": "notch",
+                    "freqs": [50, 100, 150],
+                    "method": "butter",
+                    "order": 2
+                }    
+            ]          
     ):
 
         #self.pre_process_steps = pre_process_steps
-        self.pre_process_steps = [
+        self.steps = [
             self._adapter.validate_python(step)
-            for step in pre_process_steps
+            for step in steps
         ]
 
     class Bandpass(BaseModel):
@@ -92,11 +188,16 @@ class pre_processing:
 
     class MaskChannels(BaseModel):
         step: Literal["mask_channels"]
-        channel_list: list = []    
+        channel_list: list[int] = []    
 
     class Downsample(BaseModel):
         step: Literal["downsample"]
         factor: int = 2
+
+    class TimeWindow(BaseModel):
+        step: Literal["time_window"]
+        t_start: float = 0
+        t_end: float = -1    
 
     PreprocessStep = Annotated[
         Union[Bandpass, 
@@ -105,7 +206,8 @@ class pre_processing:
             Notch, 
             BadChannelDetection, 
             MaskChannels, 
-            Downsample
+            Downsample,
+            TimeWindow
         ],
         Field(discriminator="step")
     ]  
@@ -149,21 +251,26 @@ class pre_processing:
                        threshold_value: float = 3, 
                        max_iter: int = 3, 
                        tail: Literal[-1,0,1] = 0
-        ):
+    ):
         """
         Detect ouliers by comparing the z-score of variable x against
         some threshold. This is repeaded until there are no outliers or
         the maximum number of iterations is reached. 
 
-        Args:
-            x (np.array): Variable to test for outliers
-            threshold (float): Threshold for outlier detection
-            max_iter (int): Maximum number of iterations
-            tail (-1,0,1): Specify weather to serach for outliers   
-                on both ends (0), just on the positive side (1) 
-                or just the negative side (-1).
+        Args
+        ----
+            x (np.array): 
+                Array of scores (n_channels, )
+            threshold (float): 
+                Threshold for outlier detection
+            max_iter (int): 
+                Maximum number of iterations
+            tail (-1,0,1): 
+                Specify weather to serach for outliers on both ends (0), 
+                just on the positive side (1) or just the negative side (-1).
 
-        Return:
+        Return
+        ------
             mask (np.array): Boolean mask (True: bad_channel, False: good_channel) 
             
         """
@@ -211,19 +318,21 @@ class pre_processing:
     def pre_process(self, 
                     data: np.ndarray, # (n_channels x n_samples)
                     fsamp: float = 2048,
-    ) -> tuple[np.ndarray, dict]:
+    ):
         
         """
-        Pre process multi-channel time series data
+        Pre process multi-channel time series data using the 
+        specified list of steps.
 
-        Args:
+        Args
+        ----
             data (np.ndarray): Raw time series data (n_channels x n_samples)
             fsamp (float): Sampling rate in Hz
 
-        Returns:
-            tuple:
-                - data (np.ndarray): Pre-prcessed time series data (n_channels x n_samples)
-                - metadata (dict): TODO    
+        Returns
+        -------
+            data (np.ndarray): Pre-prcessed time series data (n_channels x n_samples)
+            metadata (dict): TODO    
         
         """
 
@@ -234,8 +343,8 @@ class pre_processing:
         # Mask bad channels
         mask = np.zeros(data.shape[0], dtype=bool)
 
-        if self.pre_process_steps is not None:
-            for step in self.pre_process_steps:
+        if self.steps is not None:
+            for step in self.steps:
 
                 cfg = step.dict()
                 
@@ -294,6 +403,13 @@ class pre_processing:
                 elif isinstance(step, self.Downsample):
                     data = data[:, ::step.factor]
                     metadata["fsamp_out"] = metadata["fsamp_out"] / step.factor
+                elif isinstance(step, self.TimeWindow):
+                    start_idx = step.t_start / metadata["fsamp_out"]
+                    if step.t_end == -1:
+                        end_idx = -1
+                    else:
+                        end_idx = step.t_end / metadata["fsamp_out"]
+                    data = data[:, start_idx:end_idx]
                 else:
                     raise ValueError(
                         "Invalid step type"
