@@ -178,8 +178,8 @@ def generate_recording(
 
         # Locate scripts
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        script_path = os.path.join(current_dir, "_run_neuromotion_new.py")
-        run_script_path = os.path.join(current_dir, "_generate_recording_new.sh")
+        script_path = os.path.join(current_dir, "_run_neuromotion.py")
+        run_script_path = os.path.join(current_dir, "_generate_recording.sh")
 
         if not os.path.exists(script_path):
             raise FileNotFoundError(f"Script not found: {script_path}")

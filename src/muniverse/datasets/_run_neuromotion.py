@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-_run_neuromotion_new.py - Container script for EMG generation
+_run_neuromotion.py - Container script for EMG generation
 
 This script receives input data (movement profiles, MUAPs, config) and returns EMG data.
 It handles both neuromotion and hybrid pipelines based on the input data.

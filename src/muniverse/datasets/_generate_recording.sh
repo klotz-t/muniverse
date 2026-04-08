@@ -2,7 +2,7 @@
 set -e
 
 # Usage:
-# ./generate_recording_new.sh docker|singularity pranavm19/muniverse:neuromotion path/to/run_neuromotion_new.py path/to/run_dir [cache_dir]
+# ./_generate_recording.sh docker|singularity pranavm19/muniverse:neuromotion path/to/_run_neuromotion.py path/to/run_dir [cache_dir]
 
 ENGINE=$1
 CONTAINER_NAME=$2
@@ -24,23 +24,23 @@ if [ "$ENGINE" == "docker" ]; then
   echo "[INFO] Running with Docker"
   docker run -i --platform linux/amd64 --rm \
     $GPU_FLAG_DOCKER \
-    -v $(realpath $SCRIPT_PATH):/opt/NeuroMotion/run_neuromotion_new.py \
+    -v $(realpath $SCRIPT_PATH):/opt/NeuroMotion/run_neuromotion.py \
     -v $(realpath $RUN_DIR):/run_dir/ \
     $CONTAINER_NAME \
     bash -c "source /opt/mambaforge/etc/profile.d/conda.sh && \
              conda activate NeuroMotion && \
              cd /opt/NeuroMotion/ && \
-             python run_neuromotion_new.py --run_dir /run_dir/"
+             python run_neuromotion.py --run_dir /run_dir/"
 elif [ "$ENGINE" == "singularity" ]; then
   echo "[INFO] Running with Singularity"
   singularity run $GPU_FLAG_SINGULARITY --cleanenv \
-    -B $(realpath $SCRIPT_PATH):/opt/NeuroMotion/run_neuromotion_new.py \
+    -B $(realpath $SCRIPT_PATH):/opt/NeuroMotion/run_neuromotion.py \
     -B $(realpath $RUN_DIR):/run_dir/ \
     $CONTAINER_NAME \
     bash -c "source /opt/mambaforge/etc/profile.d/conda.sh && \
              conda activate NeuroMotion && \
              cd /opt/NeuroMotion/ && \
-             python run_neuromotion_new.py --run_dir /run_dir/"
+             python run_neuromotion.py --run_dir /run_dir/"
 else
   echo "ERROR: Unknown engine '$ENGINE'. Use 'docker' or 'singularity'."
   exit 1
