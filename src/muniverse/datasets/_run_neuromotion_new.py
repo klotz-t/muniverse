@@ -72,7 +72,7 @@ def generate_emg(muaps, spikes, muap_angle_labels, angle_profile):
             end_emg = np.min([firing + offset, time_samples])
 
             init_muap = init_emg - (firing - offset) # 0 if the window is inside the range
-            end_muap = end_emg - (firing + offset) + offset * 2 # win if the window is inside the range
+            end_muap = end_emg - (firing + offset) + offset * 2 # Win if the window is inside the range
 
             # Add contribution to EMG
             emg[:, :, init_emg:end_emg] += curr_muap[:, :, init_muap:end_muap]
@@ -92,7 +92,7 @@ def simulate_dof_range(msk_model, dof, ms_label):
         Tuple of (changes_dict, num_steps, min_angle, max_angle)
     """
     # Build movement profile for MUAP generation
-    fs_mov = 50  # sampling frequency for movement simulation
+    fs_mov = 50  # Sampling frequency for movement simulation
     if dof == "Flexion-Extension":
         poses = ["ext", "default", "flex"]
         min_angle, max_angle = -65, 65
@@ -107,8 +107,8 @@ def simulate_dof_range(msk_model, dof, ms_label):
 
     # Define muscles to track and extract parameter changes
     ms_labels_msk = ["ECRB", "ECRL", "PL", "FCU", "ECU", "EDCI", "FDSI"]
-    _ = msk_model.mov2len(ms_labels=ms_labels_msk) # compute muscle length changes
-    d_mu_params = msk_model.len2params() # compute motor unit parameter changes
+    _ = msk_model.mov2len(ms_labels=ms_labels_msk) # Compute muscle length changes
+    d_mu_params = msk_model.len2params() # Compute motor unit parameter changes
     num_steps = d_mu_params["steps"]
 
     # Apply muscle name mapping
@@ -221,12 +221,9 @@ def generate_muaps_biomime(config, mu_properties, d_mu_properties, num_steps, ms
     order = filter_cfg.get("FilterOrder")
     b, a = butter(order, normal_cutoff, btype="low", analog=False)
 
-    # Handle muscle name mapping for BioMime
-    # TODO: Handle this outside.
-    if ms_label == "FCU_u" or ms_label == "FCU_h":
-        tgt_ms_labels = ["FCU"] * num_mus
-    else:
-        tgt_ms_labels = [ms_label] * num_mus
+    # BioMime uses "FCU" for both FCU sub-heads; normalize before generating MUAPs.
+    biomime_label = "FCU" if ms_label in ("FCU_u", "FCU_h") else ms_label
+    tgt_ms_labels = [biomime_label] * num_mus
 
     ch_depth = d_mu_properties["depth"].loc[:, tgt_ms_labels]
     ch_cv = d_mu_properties["cv"].loc[:, tgt_ms_labels]
@@ -359,12 +356,12 @@ def main(args):
     muscle_index = muscle_labels.index(ms_label)
     num_mus = muscle_mu_counts[muscle_index]
 
-    # TODO: This could be handled in simulate.py or generate_hybrid_recording function
-    if ms_label == 'Tibialis_anterior':
-        ms_label = 'ECRB' 
-        
-    mn_pool = MotoneuronPool(num_mus, ms_label, **mn_default_settings)
-    
+    # NeuroMotion does not have a Tibialis Anterior model; substitute ECRB as a placeholder
+    # so the MN pool can still be initialized with the correct motor unit count.
+    mn_pool_label = 'ECRB' if ms_label == 'Tibialis_anterior' else ms_label
+    mn_pool = MotoneuronPool(num_mus, mn_pool_label, **mn_default_settings)
+
+    properties = {}  # Populated only for neuromotion pipeline
     # Determine MUAP source and get MUAPs
     if 'muaps' in input_data:
         # Hybrid pipeline - use provided MUAPs

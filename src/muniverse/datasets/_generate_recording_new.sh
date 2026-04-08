@@ -22,7 +22,7 @@ fi
 
 if [ "$ENGINE" == "docker" ]; then
   echo "[INFO] Running with Docker"
-  docker run -it --platform linux/amd64 --rm \
+  docker run -i --platform linux/amd64 --rm \
     $GPU_FLAG_DOCKER \
     -v $(realpath $SCRIPT_PATH):/opt/NeuroMotion/run_neuromotion_new.py \
     -v $(realpath $RUN_DIR):/run_dir/ \

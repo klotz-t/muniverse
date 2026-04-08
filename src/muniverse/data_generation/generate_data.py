@@ -103,7 +103,7 @@ def generate_neuromotion_recording(
             logger.add_output(file_path, os.path.getsize(file_path))
 
     # Finalize and save the log
-    log_path = logger.finalize(run_dir, engine, container)
+    log_path = logger.finalize(engine, container)
     print(f"Run log saved to: {log_path}")
 
     return run_dir
@@ -193,7 +193,7 @@ def generate_hybrid_tibialis_recording(
             logger.add_output(file_path, os.path.getsize(file_path))
 
     # Finalize and save the log
-    log_path = logger.finalize(run_dir, engine, container)
+    log_path = logger.finalize(engine, container)
     print(f"Run log saved to: {log_path}")
 
     return run_dir

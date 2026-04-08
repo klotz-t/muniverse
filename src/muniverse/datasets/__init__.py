@@ -10,11 +10,7 @@ from easyDataverse import Dataverse
 
 from ..utils.containers import pull_container, verify_container_engine
 from ..utils.logging import SimulationLogger
-from .simulate import (
-    generate_hybrid_recording as _generate_hybrid_recording,
-    generate_neuromotion_recording,
-    validate_config,
-)
+from .simulate import generate_recording as _run_recording, validate_config
 from .movement import generate_effort_profile, generate_angle_profile
 
 
@@ -67,7 +63,7 @@ def generate_synthetic_recording(
         verbose (bool, optional): If True, enable verbose logging. Defaults to False.
 
     Returns:
-        dict: Dictionary containing simulation outputs (see generate_neuromotion_recording for details).
+        dict: Dictionary containing simulation outputs (see simulate.generate_recording for details).
     """
     # Validate required parameters
     if not input_config or not output_dir:
@@ -89,15 +85,13 @@ def generate_synthetic_recording(
     logger.set_config(config_content)
 
     # Generate movement profiles from config
-    effort_profile = generate_effort_profile(config_content)
-    angle_profile = generate_angle_profile(config_content)
+    effort_profile, _ = generate_effort_profile(config_content)
+    angle_profile, _ = generate_angle_profile(config_content)
 
-    # Call neuromotion recording generation
-    results = generate_neuromotion_recording(
+    results = _run_recording(
         config=config_content,
         effort_profile=effort_profile,
         angle_profile=angle_profile,
-        run_dir=run_dir,
         engine=engine,
         container=container,
         logger=logger,
@@ -111,8 +105,9 @@ def generate_synthetic_recording(
     
     return results
 
+
 def generate_hybrid_recording(
-    input_config, output_dir, engine, container, cache_dir, muaps, muap_angle_labels, verbose=False
+    input_config, output_dir, engine, container, cache_dir, muaps, muap_angle_labels, verbose=False  # noqa: cache_dir unused (reserved for future)
 ):
     """
     Generate a hybrid recording using provided MUAPs and angle labels.
@@ -125,8 +120,7 @@ def generate_hybrid_recording(
         container (str):
             For Docker: Name of the container image (e.g., "pranavm19/muniverse:neuromotion")
             For Singularity: Full path to the container file (e.g., "environment/muniverse_neuromotion.sif")
-        muaps (np.ndarray): MUAPs array with shape (n_motor_units, n_angle_labels, n_electrodes, n_timepoints).
-            The electrode dimension can be a flattened grid (n_rows * n_cols) or a 2D grid that will be reshaped.
+        muaps (np.ndarray): MUAPs array with shape (n_motor_units, n_angle_labels, ch_rows, ch_cols, n_timepoints).
         muap_angle_labels (np.ndarray): Angle labels array of length n_angle_labels describing what angle each MUAP corresponds to.
         output_dir (str, optional): Path to the output directory where the generated data will be saved. Defaults to None.
         verbose (bool, optional): If True, enable verbose logging. Defaults to False.
@@ -147,18 +141,6 @@ def generate_hybrid_recording(
     if muap_angle_labels is None:
         raise ValueError("'muap_angle_labels' is a required parameter for hybrid recording")
 
-    # Validate muaps and muap_angle_labels shapes
-    muaps = np.asarray(muaps)
-    muap_angle_labels = np.asarray(muap_angle_labels)
-
-    if len(muaps.shape) < 4:
-        raise ValueError(f"muaps must have at least 4 dimensions, got shape {muaps.shape}")
-
-    if muaps.shape[1] != len(muap_angle_labels):
-        raise ValueError(
-            f"muaps second dimension ({muaps.shape[1]}) must match muap_angle_labels length ({len(muap_angle_labels)})"
-        )
-
     # Initialize logger
     logger = SimulationLogger()
 
@@ -172,18 +154,17 @@ def generate_hybrid_recording(
     logger.set_config(config_content)
 
     # Generate movement profiles from config
-    effort_profile = generate_effort_profile(config_content)
-    angle_profile = generate_angle_profile(config_content)
+    effort_profile, _ = generate_effort_profile(config_content)
+    angle_profile, _ = generate_angle_profile(config_content)
 
-    # Call hybrid recording generation
-    results = _generate_hybrid_recording(
+    results = _run_recording(
         config=config_content,
         effort_profile=effort_profile,
         angle_profile=angle_profile,
-        muaps=muaps,
-        muap_angle_labels=muap_angle_labels,
         engine=engine,
         container=container,
+        muaps=muaps,
+        muap_angle_labels=muap_angle_labels,
         logger=logger,
         verbose=verbose,
     )
