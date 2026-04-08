@@ -21,38 +21,50 @@ class pre_processing:
         "bandpass", "highpass", "lowpass", "notch",
         "bad_channel_detection", "mask_channels", "downsample":
 
-        *Bandpass filter*::
+        **Bandpass filter**: Bandpass filter time series data using a digital
+        infinite impulse response filter ("butter") or finite impulse response
+        filter ("firwin2")::
 
             {
                 "step": "bandpass",
                 "high_pass": float,
                 "low_pass": float,
                 "method": "butter" | "firwin2",
-                "order": int,      # if method == "butter"
-                "numtabs": int,    # if method == "firwin2"
+                "order": int,      # required if method == "butter"
+                "numtabs": int,    # required if method == "firwin2"
             }
 
-        *Highpass filter*::
+        **Highpass filter**: Highpass filter time series data using a digital
+        infinite impulse response filter ("butter") or finite impulse response
+        filter ("firwin2")::
 
             {
                 "step": "highpass",
                 "high_pass": float,
                 "method": "butter" | "firwin2",
-                "order": int,
-                "numtabs": int,
+                "order": int, # required if method == "butter"
+                "numtabs": int, # required if method == "firwin2"
             }
 
-        *Lowpass filter*::
+        **Lowpass filter**: Lowpass filter time series data using a digital
+        infinite impulse response filter ("butter") or finite impulse response
+        filter ("firwin2")::
 
             {
                 "step": "lowpass",
                 "low_pass": float,
                 "method": "butter" | "firwin2",
-                "order": int,
-                "numtabs": int,
+                "order": int, # required if method == "butter"
+                "numtabs": int, # required if method == "firwin2"
             }
 
-        *Notch filter*::
+        **Notch filter**:: Apply a digital notch (stop band) filter using either a
+        infinite impulse response filter ("butter"), a finite impulse response 
+        filter ("iirnotch") or performing filtering in the frequency domain 
+        ("fft_nulling" and "fft_interpolation"). For "fft_nulling" the spectrum in
+        the specified frequency band is set to zero, for "fft_interpolation" the 
+        spectral amplitude is interpolated through by the neighbourhood. Time series
+        data is recovered through an inverse fft.
 
             {
                 "step": "notch",
@@ -62,15 +74,19 @@ class pre_processing:
                 "dfreq": float  # if "iirnotch", "fft_nulling" or "fft_interpolation"
             }
 
-        **Bad Channel Detection**: Automatically detect bad channels based on some metric ("std" or "rms").
-        If method is "zscore" the score distribution is normalized (zero mean, unit standard deviation). 
-        All scores are compared to a "threshold_value". If tail=1 all values above the threshold are rejected,
-        if tail=-1 all values below the theshold are rejected. For tail=0 all the absolute value of the score
-        is computed and all values above the threshold are rejected (only availible if "method" == "zscore")::  
+        **Bad Channel Detection**: Automatically detect bad channels based on some 
+        metric ("std" or "rms") computed in a given time window (given in seconds). 
+        If method is "zscore" the score distribution is normalized (zero mean, 
+        unit standard deviation). All scores are compared to a "threshold_value". 
+        If tail=1 all values above the threshold are rejected, if tail=-1 all values 
+        below the theshold are rejected. For tail=0 all the absolute value of the score
+        is computed and all values above the threshold are rejected (only availible 
+        if "method" == "zscore")::  
 
             {
                 "step": "bad_channel_detection",
                 "metric": Literal["std", "rms"],
+                "window": (t0, t1) | None, # Given in seconds, if None consider the full data
                 "method": "zscore" | "threshold",
                 "threshold_value": float,
                 "tail": -1 | 0 | 1
@@ -181,6 +197,7 @@ class pre_processing:
     class BadChannelDetection(BaseModel):
         step: Literal["bad_channel_detection"]
         metric: Literal["std", "rms"]
+        window: tuple[float, float] | None = None
         method: Literal["zscore", "threshold"] = "zscore"
         threshold_value: float = 3
         max_iter: int = 3
@@ -345,8 +362,6 @@ class pre_processing:
 
         if self.steps is not None:
             for step in self.steps:
-
-                cfg = step.dict()
                 
                 if isinstance(step, self.Bandpass):
                     data = bandpass_signals(
@@ -390,7 +405,13 @@ class pre_processing:
                     local_mask[step.channel_list] = True
                     mask += local_mask
                 elif isinstance(step, self.BadChannelDetection):
-                    scores = self._get_scores(data, step.metric)
+                    if step.window is not None:
+                        idx0 = int(step.window[0] / metadata["fsamp_out"])
+                        idx1 = int(step.window[1] / metadata["fsamp_out"])
+                    else:
+                        idx0 = 0
+                        idx1 = data.shape[1]
+                    scores = self._get_scores(data[:, idx0:idx1], step.metric)
                     local_mask = self._get_bad_channels(
                         scores,
                         mask,
@@ -406,7 +427,7 @@ class pre_processing:
                 elif isinstance(step, self.TimeWindow):
                     start_idx = step.t_start / metadata["fsamp_out"]
                     if step.t_end == -1:
-                        end_idx = -1
+                        end_idx = data.shape[1]
                     else:
                         end_idx = step.t_end / metadata["fsamp_out"]
                     data = data[:, start_idx:end_idx]
