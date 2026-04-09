@@ -363,7 +363,7 @@ class CBSS:
             spikes, sil = est_spike_times(source, fsamp)
             score_last = score
             cov_isi = self._calc_cov_isi(spikes, fsamp)
-            if self.refinement_metric == "cov":
+            if self.refinement_metric == "cov_isi":
                 score = cov_isi 
             else:
                 score = 1 - sil
