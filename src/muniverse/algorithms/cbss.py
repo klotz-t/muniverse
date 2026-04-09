@@ -10,62 +10,62 @@ class CBSS:
 
     Parameters
     ----------
-        random_seed (int): 
+        random_seed : int , default 1909 
             Seed of the random number generator.
-        ext_fact (int): 
+        ext_fact : int , default 12
             Extension factor
-        whitening_method ("ZCA", "PCA" or "Cholesky"): 
-            Method used for whitening
-        whitening_regularization ("auto", float or None): 
-            Method used to regularize small eigenvalues. If "auto" the mean of 
-            the second half of the eigenvalues is used.
-        cluster_method ("kmeans"): 
+        whitening_method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
+            Method used for whitening,
+        whitening_regularization : {"auto", float, None}, default "auto" 
+            Adds a small value to the eigenvalues for regularization. 
+            If "auto" the mean of the second half of the eigenvalues is used.
+        cluster_method : {"kmeans"}, default "kmeans" 
             Method used to seperate motor unit spikes and background spikes 
             (currently only "kmeans" is implemented).    
-        ica_n_iter (int): 
+        ica_n_iter : int , default 100
             Number of fastICA runs, i.e., maximum number of extracted sources.
-        opt_initalization ("random" or "activity_idx"): 
+        opt_initalization : {"random", "activity_idx"}, default "random" 
             Initalization method of the fastICA fixed-point algorithm. 
             Either drawn from a Gaussian distribution ("random") or using the 
             time instances with maximum column norms ("activity_idx").
-        opt_function_exp (float): 
+        opt_function_exp : float , default 3
             Exponent a of the loss function g(x)=x * (x^2 + epsilon)^((a-1)/2) 
             representing a smooth approximation of g(x) = sign(x) * abs(x)**a. 
-        opt_max_iter (int): 
+        opt_max_iter : int , default 100
             Maximum number of iterations for the fastICA fixed-point algorithm.  
-        opt_tol (float): 
+        opt_tol : float , default 1e-4 
             Convergence criterion for the fixed-point algorithm. Stops if 
             the dot product between the current and previous unmixing weights 
             minus 1 is less than the tolerance value.
-        source_deflation ("gram-schmidt", "projection_deflation" or None): 
+        source_deflation : {"gram-schmidt", "projection_deflation",  None}, default "gram-schmidt"
             Method used to avoid repeaded convergence to the same source in 
             the fixed point algorithm.  
-        refinement_loop (bool): 
+        refinement_loop : bool , default True
             If True, the unmixing weights w are updated through self-supervised 
             learning. The updated unmixing weights are the mean of the 
             whitened signal at the detected spikes.
-        refinement_loss ("cov_isi" or "sil"):
+        refinement_loss : {"cov_isi", "sil"}, default "cov_isi"
             Metric used as optimization loss in the refinement loop. Can be either
             minimizing the coefficient of variation (Cov) of the interspike 
             interalls ("cov_isi") or maximizing the silhouette score ("sil"). 
-        refinement_max_iter (int):
+        refinement_max_iter : int , default 100
             Maximum number of iterations of the refinement loop
-        refinement_min_spikes (int): 
+        refinement_min_spikes : int , default 10
             Only enter the refinement loop if the number of detected spikes is 
             above the given threshold.        
-        peel_off (bool): 
+        peel_off : bool , default True
             If True, the contribution of identified sources is subtraced 
             from the whitened signal. 
-        peel_off_window (float):
+        peel_off_window : float , default 0.025
             Duration of the window used to peel off contributions from 
             detected sources (in seconds).    
-        sil_th (float): 
+        sil_th : float , default 0.9
             Classify sources into good (score above sil_th) or bad based 
             on a pseudo silhouette score.
-        cov_th (float): 
+        cov_th : float , default 0.35
             Classify sources into good (scores below cov_th) or bad based 
             on the coefficient of variation of the interspike intevalls.    
-        verbose (bool): 
+        verbose : float , default True
             If True, print progress.                
 
     Example
