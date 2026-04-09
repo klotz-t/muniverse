@@ -21,17 +21,28 @@ def bandpass_signals(data: np.ndarray, # (n_channels x n_samples)
     """
     Bandpass filter timeseries data
 
-    Args:
-        data (np.ndarray): data (n_channels x n_samples)
-        fsamp (float): Sampling frequency
-        low_pass (float): Cut-off frequency for the low-pass filter
-        high_pass (float): Cut-off frequency for the high-pass filter
-        method (str): Filter type (butter or firwin2)
-        order (int | None): Order of the filter (required for butter) 
-        numtabs (int | None): Number of filter tabs (required for firwin2)
+    Args
+    ----
+        data : np.ndarray
+            Input data (n_channels x n_samples)
+        fsamp : float 
+            Sampling frequency in Hz
+        high_pass : float, default 20 
+            Cut-off frequency for the high-pass filter in Hz    
+        low_pass : float, default 500 
+            Cut-off frequency for the low-pass filter in Hz
+        method :  {"butter", "firwin2"}, default "butter"
+            Filter type
+        order : int | None, default 2 
+            Order of the filter (required for "butter") 
+        numtabs : int | None, default 101 
+            Number of filter tabs (required for firwin2)
 
-    Returns:
-        np.ndarray : filtered data (n_channels x n_samples)
+    Returns
+    -------
+        data : np.ndarray  
+            filtered data (n_channels x n_samples)
+
     """
 
     if high_pass >= low_pass:
@@ -77,6 +88,27 @@ def highpass_signals(
 ) -> np.ndarray:
     """
     High-pass filter timeseries data.
+
+    Args
+    ----
+        data : np.ndarray
+            Input data (n_channels x n_samples)
+        fsamp : float 
+            Sampling frequency in Hz
+        high_pass : float, default 20 
+            Cut-off frequency for the high-pass filter in Hz    
+        method :  {"butter", "firwin2"}, default "butter"
+            Filter type
+        order : int | None, default 2 
+            Order of the filter (required for "butter") 
+        numtabs : int | None, default 101 
+            Number of filter tabs (required for firwin2)
+
+    Returns
+    -------
+        data : np.ndarray  
+            filtered data (n_channels x n_samples)
+
     """
 
     if high_pass <= 0:
@@ -116,6 +148,27 @@ def lowpass_signals(
 ) -> np.ndarray:
     """
     Low-pass filter timeseries data.
+
+    Args
+    ----
+        data : np.ndarray
+            Input data (n_channels x n_samples)
+        fsamp : float 
+            Sampling frequency in Hz  
+        low_pass : float, default 500 
+            Cut-off frequency for the low-pass filter in Hz
+        method :  {"butter", "firwin2"}, default "butter"
+            Filter type
+        order : int | None, default 2 
+            Order of the filter (required for "butter") 
+        numtabs : int | None, default 101 
+            Number of filter tabs (required for firwin2)
+
+    Returns
+    -------
+        data : np.ndarray  
+            filtered data (n_channels x n_samples)
+
     """
 
     nyq = fsamp / 2
@@ -157,16 +210,26 @@ def notch_signals(data: np.ndarray,
     """
     Notch filter time series data
 
-    Args:
-        emg_data (np.ndarray): Time series data (n_channels x n_samples)
-        fsamp (float): Sampling frequency
-        freqs (list[float]): List of frequencies to be filtered
-        method (str): Filter type (one of butter, iirnotch, fft_nulling, fft_interpolation)
-        order (int): Order of the filter (if method is butter)
-        dfreq (float): Width of the notch filter (plus/minus dfreq) (if method is iirnotch, fft_nulling, fft_interpolation)
+    Args
+    ----
+        data : np.ndarray) 
+            Input data (n_channels x n_samples)
+        fsamp : float 
+            Sampling frequency in Hz
+        freqs : list of float, default [50, 100, 150] 
+            List of frequencies to be notch filtered
+        method : {"butter", "iirnotch", "fft_nulling", "fft_interpolation"}, default "butter"
+            Filter type 
+        order : int or None, default 2
+            Order of the filter (if method is butter)
+        dfreq : float or None, default 1 
+            Width of the notch filter (in both directions) in Hz 
+            (if method is iirnotch, fft_nulling, fft_interpolation).
 
-    Returns:
-        np.ndarray : Filtered time series data (n_channels x n_samples)
+    Returns
+    -------
+        data : np.ndarray 
+            Filtered data (n_channels x n_samples)
     """
 
     if isinstance(freqs, float) or isinstance(freqs, int):
@@ -344,12 +407,17 @@ def extension(Y: np.ndarray, # (n_channels x n_samples)
     Extend a multi-channel signal Y by an extension factor R
     using Toeplitz matrices.
 
-    Parameters:
-        Y (np.ndarray): Original signal (n_channels x n_samples)
-        R (int): Extension factor (number of lags)
+    Args
+    ----
+        Y : np.ndarray 
+            Original signal (n_channels x n_samples)
+        R : int 
+            Extension factor (number of lags)
 
-    Returns:
-        eY (np.ndarray): Extended signal (n_channels x (R * n_samples))
+    Returns
+    -------
+        eY : np.ndarray 
+            Extended signal (n_channels x (R * n_samples))
     """
     n_channels, n_samples = Y.shape
     eY = np.zeros((n_channels * R, n_samples))
@@ -370,18 +438,29 @@ def whitening(Y: np.ndarray, # (n_channels x n_samples)
               eps: Optional[float] = 1e-10
 ):
     """
-    Adaptive whitening function using ZCA, PCA, or Cholesky.
+    Whiten data using the ZCA, PCA, or Cholesky method.
 
-    Parameters:
-        Y (ndarray): Input signal (n_channels x n_samples)
-        method ("ZCA", "PCA" or "Cholesky"): Whitening method 
-        backend ("ed" or "svd"): Method used to calculate eigenvalues and eigenvectors
-        regularization ("auto", float or None): 'auto', float value, or None
-        eps (float): Small epsilon for numerical stability
+    Args
+    ----
+        Y : np.ndarray 
+            Input signal (n_channels x n_samples)
+        method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
+            Whitening method 
+        backend : {"ed", "svd"}, default "ed" 
+            Method used to calculate eigenvalues and eigenvectors
+        regularization : {"auto", float, None}, default "auto" 
+            Adds a small value to the eigenvalues for regularization.
+            If "auto", the mean of the second half of the eigenvalues is used.
+        eps : float 
+            Small epsilon added to the eigenvalues for numerical stability
 
-    Returns:
-        wY (np.ndarray): Whitened signal (n_channels x n_samples)
-        Z (np.ndarray): Whitening matrix (n_channels x n_channels)
+    Returns
+    -------
+        wY : np.ndarray) 
+            Whitened signal (n_channels x n_samples)
+        Z : np.ndarray 
+            Whitening matrix (n_channels x n_channels)
+
     """
     n_channels, n_samples = Y.shape
     use_svd = backend == "svd"
@@ -440,18 +519,31 @@ def whitening(Y: np.ndarray, # (n_channels x n_samples)
 
 def est_spike_times(sig, fsamp, cluster="kmeans", a=2, min_delay=0.01):
     """
-    Estimate spike indices given a motor unit source signal and compute
-    a silhouette-like metric for source quality quantification
+    Estimate spike indices given a spiky source signal and compute
+    a silhouette-like metric for source quality quantification.
+    To do so, (i) a asymetric power law is applied to the signal,
+    (ii) a peak detection method identifies spike candidates that
+    are (iii) clustered into true and false spikes.
 
-    Args:
-        sig (np.ndarray): Input signal (motor unit source)
-        fsamp (float): Sampling rate in Hz
-        cluster (string): Clustering method used to identify the spike indices
-        a (float): Exponent of assymetric power law
+    Args
+    ----
+        sig : np.ndarray 
+            Spike-like input signal (predicted sources)
+        fsamp : float 
+            Sampling rate in Hz
+        cluster : {"kmeans"}, default "kmeans"
+            Clustering method used to identify the spike indices
+        a : float , default 2
+            Exponent of assymetric power law
+        min_delay : float , default 0.01 
+            Mimium distance between two spikes (used for peak detection)   
 
-    Returns:
-        est_spikes (np.ndarray): Estimated spike indices
-        sil (float): Silhouette-like score (0 = poor, 1 = strong separation)
+    Returns
+    -------
+        est_spikes : np.ndarray 
+            Estimated spike indices
+        sil : float 
+            Silhouette-like score (0 = poor, 1 = strong separation)
     """
     sig = np.asarray(sig)
 
@@ -499,12 +591,18 @@ def gram_schmidt(w, B):
     """
     Stabilized Gram-Schmidt orthogonalization.
 
-    Args:
-        w (np.ndarray): Input vector to be orthogonalized (shape: [n,])
-        B (np.ndarray): Matrix of orthogonal basis vectors in columns (shape: [n, k])
+    Args
+    ----
+        w : np.ndarray 
+            Vector to be orthogonalized (shape: [n,])
+        B : np.ndarray 
+            Matrix of basis vectors in columns (shape: [n, k])
 
-    Returns:
-        u (np.ndarray): Orthogonalized vector
+    Returns
+    -------
+        u : np.ndarray 
+            Orthogonalized vector
+
     """
     w = np.asarray(w, dtype=float)
     B = np.asarray(B, dtype=float)
@@ -636,14 +734,21 @@ def spike_triggered_average(sig, spikes, win=0.02, fsamp=2048):
     """
     Calculate the spike triggered average given the spike times of a source
 
-    Parameters:
-        sig (2D np.array): signal [channels x time]
-        spikes (1D array): Spike indices
-        fsamp (float): Sampling frequency in Hz
-        win (float): Window size in seconds for MUAP template (in seconds)
+    Args
+    ----
+        sig : np.ndarray 
+            Input signal [channels x time]
+        spikes : np.ndarray 
+            Array [n_spikes, ] of spike indices
+        win : float , default 0.02
+            Window size in seconds for MUAP template     
+        fsamp : float , default 2048
+            Sampling frequency in Hz
 
-    Returns:
-        waveform (2D np.array): Estimated impulse response of a given source
+    Returns
+    -------
+        waveform : np.ndarray 
+            Estimated impulse response of a given source
 
     """
 
@@ -664,15 +769,23 @@ def peel_off(sig, spikes, win=0.02, fsamp=2048):
     """
     Peel off signal component based on spike triggered average.
 
-    Parameters:
-        sig (2D np.array): signal [channels x time]
-        spikes (1D array): Spike indices
-        fsamp (float): Sampling frequency in Hz
-        win (float): Window size in seconds for MUAP template (in seconds)
+    Args
+    ----
+        sig : np.ndarray 
+            signal [channels x time]
+        spikes : np.ndarray 
+            Array [n_spikes, ] of spike indices
+        win : float , default 0.02
+            Window size in seconds for MUAP template     
+        fsamp : float , default 2048
+            Sampling frequency in Hz
 
-    Returns:
-        residual_sig (2D np.array): Residual signal after removing component
-        comp_sig (2D np.array): Estimated contribution of the given source
+    Returns
+    -------
+        residual_sig : np.ndarray 
+            Residual signal after removing component
+        comp_sig : np.ndarray 
+            Estimated contribution of the given source
     """
 
     waveform = spike_triggered_average(sig, spikes, win, fsamp)
@@ -712,12 +825,17 @@ def spike_dict_to_long_df(spike_dict, fsamp=2048):
     """
     Convert a dictionary of spike instances into a long-formatted DataFrame.
 
-    Parameters:
-        spike_dict (dict): Key: unit_id; Value: array of spike indices
-        fsamp (float): Sampling frequency to convert sample indices to time.
+    Args
+    ----
+        spike_dict : dict 
+            Dictonary of spike times {unit_id (int): list(int)}
+        fsamp : float, default 2048
+            Sampling frequency in Hz
 
-    Returns:
-        pd.DataFrame: Long-formatted DataFrame (BIDS-events style)
+    Returns
+    -------
+        df : pd.DataFrame 
+            Long-formatted spike table (BIDS-events style)
     """
 
     columns = ["onset", "duration", "sample", "unit_id", "description"]
