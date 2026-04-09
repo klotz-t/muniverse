@@ -1,5 +1,4 @@
 import numpy as np
-from numba import njit
 from typing import List, Literal, Optional
 from .core import bandpass_signals, notch_signals, extension, whitening, est_spike_times, remove_duplicates, remove_bad_sources, gram_schmidt, peel_off
 
@@ -114,31 +113,31 @@ class CBSS:
         self.notch_order = 2
         self.notch_width = 1
 
+        self.random_seed = random_seed
         self.ext_fact = ext_fact
         self.whitening_method = whitening_method
         self.whitening_reg = whitening_reg
+        self.cluster_method = cluster_method
         self.ica_n_iter = ica_n_iter
         self.opt_initalization = opt_initalization
         self.opt_function_exp = opt_function_exp
         self.opt_max_iter = opt_max_iter
         self.opt_tol  = opt_tol
         self.source_deflation = source_deflation
-        self.peel_off = peel_off
-        self.peel_off_window = peel_off_window
-        self.cluster_method = cluster_method
-        self.random_seed = random_seed
         self.refinement_loop = refinement_loop
         self.refinement_min_spikes = refinement_min_spikes
         self.refinement_loss = refinement_loss
         self.refinement_max_iter = refinement_max_iter
+        self.peel_off = peel_off
+        self.peel_off_window = peel_off_window
         self.sil_th = sil_th
         self.cov_th = cov_th
+        self.verbose = verbose
 
         self.min_num_spikes = 10
         self.match_th = match_th
         self.match_max_shift = match_max_shift
         self.match_tol = match_tol
-        self.verbose = verbose
 
         # Convert config object (if provided) to a dictionary
         config_dict = vars(config) if config is not None else {}
@@ -153,6 +152,15 @@ class CBSS:
                 print(f"Warning: ignoring invalid parameter: {key}")
 
     def set_param(self, **kwargs):
+        """
+        Update CBSS parameters given an arbitary list of key value pairs
+
+        Args
+        ----
+            **kwargs
+                Parsed parameteters
+        
+        """
         for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -166,15 +174,23 @@ class CBSS:
         """
         Run CBSS decomposition
 
-        Args:
-            sig (np.ndarray): Input (EMG) signal (n_channels x n_samples)
-            fsamp (float): Sampling frequency in Hz
+        Args
+        ----
+            sig : np.ndarray 
+                Input (EMG) signal (n_channels x n_samples)
+            fsamp : float 
+                Sampling frequency in Hz
 
-        Returns:
-            sources (np.ndarray): Estimated spike responses (n_mu x n_samples)
-            spikes (dict): Sample indices of motor neuron discharges
-            sil (np.ndarray): Pseudo-silhouette scores of the estimated sources
-            mu_filters (np.ndarray): Optimized motor unit filters
+        Returns
+        -------
+            sources : np.ndarray 
+                Estimated spike responses (n_components x n_samples)
+            spikes : dict 
+                Sample indices of motor neuron discharges
+            sil : np.ndarray 
+                Pseudo-silhouette scores of the estimated sources
+            unmixing_weights : np.ndarray 
+                Learned weights of the unmixing matrix
         """
 
         # Initalize random number generator
@@ -312,14 +328,21 @@ class CBSS:
         a smooth approximation of G(x) = sign(x) * abs(x)^a.
         For a = 3 this is equvivalent to maximizing skewness.
 
-        Args:
-            w (np.ndarray): Initial weight vector (n_channels,)
-            X (np.ndarray): Whitened signal matrix (n_channels x n_samples)
-            B (np.ndarray): Current separation matrix (n_components x n_channels)
+        Args
+        ----
+            w : np.ndarray) 
+                Initial unmixing weight vector (n_channels,)
+            X : np.ndarray 
+                Whitened signal (n_channels x n_samples)
+            B : np.ndarray 
+                Current unmixing matrix (n_components x n_channels)
 
-        Returns:
-            w (np.ndarray): Optimized weight vector
-            k (int): Number of iterations taken
+        Returns
+        -------
+            w : np.ndarray 
+                Optimized unmixing weight vector
+            k : int 
+                Number of iterations taken
         """
 
         delta = np.ones(self.opt_max_iter)
@@ -369,14 +392,21 @@ class CBSS:
 
         Args
         ----
-            w (np.ndarray): Initial weight vector
-            X (np.ndarray): Whitened signal matrix (n_channels x n_samples)
-            cov (float): Coefficient of variance of the initial source
-            fsamp (float): Sampling rate in Hz
+            w : np.ndarray 
+                Initial unmixing weight vector
+            X : np.ndarray 
+                Whitened signal matrix (n_channels x n_samples)
+            sil : float 
+                Silhouette score at initalization  
+            cov_isi : float 
+                ISI Coefficient of variance at initalization  
+            fsamp : float 
+                Sampling rate in Hz
 
         Returns
         -------
-            w (np.ndarray): Optimized weight vector
+            w : np.ndarray 
+                Optimized weight vector
 
         """
 
@@ -401,6 +431,18 @@ class CBSS:
         """
         Helper function to calculate the coefficent of varation
         of the interspike intervalls
+
+        Args
+        ----
+            spikes : list of int
+                List of spike times (in samples)
+            fsamp: float
+                Sampling rate in Hz
+
+        Returns
+        -------
+            cov_isi : float
+                Coefficient of variation of the interspike intervalls
         
         """
 
@@ -415,6 +457,19 @@ class CBSS:
     def _get_refinement_loss(self, sil, cov_isi):
         """
         Helper function to compute the loss in the refinement loop
+
+        Args
+        ----
+            sil : float
+                Silhouette score
+            cov_isi: float
+                Coefficient of variation of the interspike intervalls
+
+        Returns
+        -------
+            score : float
+                Score with respect to the specified metric
+
         
         """
 
@@ -424,12 +479,3 @@ class CBSS:
             score = 1 - sil
 
         return score
-
-
-    def _write_pipeline_sidecar(self):
-        """
-        Write the pipeline metadata into a json file.
-
-        """
-        # ToDo
-        pass
