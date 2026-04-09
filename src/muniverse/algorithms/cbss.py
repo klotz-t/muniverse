@@ -14,31 +14,31 @@ class CBSS:
         ext_fact : int , default 12
             Extension factor
         whitening_method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
-            Method used for whitening,
+            Method used for whitening
         whitening_regularization : {"auto", float, None}, default "auto" 
             Adds a small value to the eigenvalues for regularization. 
-            If "auto" the mean of the second half of the eigenvalues is used.
-        cluster_method : {"kmeans"}, default "kmeans" 
+            If "auto", the mean of the second half of the eigenvalues is used.
+        spike_cluster_method : {"kmeans"}, default "kmeans" 
             Method used to seperate motor unit spikes and background spikes 
             (currently only "kmeans" is implemented).    
-        ica_n_iter : int , default 100
+        ica_iterations : int , default 100
             Number of fastICA runs, i.e., maximum number of extracted sources.
-        opt_initalization : {"random", "activity_idx"}, default "random" 
+        ica_initalization : {"random", "activity_idx"}, default "random" 
             Initalization method of the fastICA fixed-point algorithm. 
             Either drawn from a Gaussian distribution ("random") or using the 
             time instances with maximum column norms ("activity_idx").
-        opt_function_exp : float , default 3
+        ica_opt_fun_exp : float , default 3
             Exponent a of the loss function g(x)=x * (x^2 + epsilon)^((a-1)/2) 
             representing a smooth approximation of g(x) = sign(x) * abs(x)**a. 
-        opt_max_iter : int , default 100
+        ica_max_iter : int , default 100
             Maximum number of iterations for the fastICA fixed-point algorithm.  
-        opt_tol : float , default 1e-4 
-            Convergence criterion for the fixed-point algorithm. Stops if 
+        ica_tol : float , default 1e-4 
+            Convergence criterion for the fastICA fixed-point algorithm. Stops if 
             the dot product between the current and previous unmixing weights 
             minus 1 is less than the tolerance value.
-        source_deflation : {"gram-schmidt", "projection_deflation",  None}, default "gram-schmidt"
+        ica_orthogonalization : {"gram-schmidt", "projection_deflation",  None}, default "gram-schmidt"
             Method used to avoid repeaded convergence to the same source in 
-            the fixed point algorithm.  
+            the fastICA fixed point algorithm.  
         refinement_loop : bool , default True
             If True, the unmixing weights w are updated through self-supervised 
             learning. The updated unmixing weights are the mean of the 
@@ -82,21 +82,21 @@ class CBSS:
             ext_fact: int = 12,
             whitening_method: Literal["ZCA", "PCA", "Cholesky"] = "ZCA",
             whitening_reg: str | float | None = "auto",
-            ica_n_iter: int = 100,
-            opt_initalization: Literal["random", "activity_idx"] = "random",
-            opt_function_exp: float = 3,
-            opt_max_iter: int = 100,
-            opt_tol: float = 1e-4,
-            source_deflation: Literal["gram-schmidt", "projection_deflation", None] = "gram-schmidt",
-            cluster_method: Literal["kmeans"] = "kmeans",
-            peel_off: bool = True,
-            peel_off_window: float = 0.025,
-            sil_th: float = 0.9,
-            cov_th: float = 0.35,
+            spike_cluster_method: Literal["kmeans"] = "kmeans",
+            ica_iterations: int = 100,
+            ica_initalization: Literal["random", "activity_idx"] = "random",
+            ica_opt_fun_exp: float = 3,
+            ica_max_iter: int = 100,
+            ica_tol: float = 1e-4,
+            ica_orthogonalization: Literal["gram-schmidt", "projection_deflation", None] = "gram-schmidt",
             refinement_loop: bool = True,
             refinement_loss: Literal["cov_isi", "sil"] = "cov_isi", 
             refinement_max_iter: int = 100,
             refinement_min_spikes: int = 10,
+            peel_off: bool = True,
+            peel_off_window: float = 0.025,
+            sil_th: float = 0.9,
+            cov_th: float = 0.35,
             unmixing_format: Literal["white", "ext"] = "white",
             match_th: float = 0.3,
             match_max_shift: float = 0.1,
@@ -117,13 +117,13 @@ class CBSS:
         self.ext_fact = ext_fact
         self.whitening_method = whitening_method
         self.whitening_reg = whitening_reg
-        self.cluster_method = cluster_method
-        self.ica_n_iter = ica_n_iter
-        self.opt_initalization = opt_initalization
-        self.opt_function_exp = opt_function_exp
-        self.opt_max_iter = opt_max_iter
-        self.opt_tol  = opt_tol
-        self.source_deflation = source_deflation
+        self.spike_cluster_method = spike_cluster_method
+        self.ica_iterations = ica_iterations
+        self.ica_initalization = ica_initalization
+        self.ica_opt_fun_exp = ica_opt_fun_exp
+        self.ica_max_iter = ica_max_iter
+        self.ica_tol  = ica_tol
+        self.ica_orthogonalization = ica_orthogonalization
         self.refinement_loop = refinement_loop
         self.refinement_min_spikes = refinement_min_spikes
         self.refinement_loss = refinement_loss
@@ -236,21 +236,21 @@ class CBSS:
         print("  - Finished")
 
         # Initalize the output variables
-        sources = np.zeros((self.ica_n_iter, sig.shape[1]))
-        spikes = {i: [] for i in range(self.ica_n_iter)}
-        sil = np.zeros(self.ica_n_iter)
-        cov_isi = np.zeros(self.ica_n_iter)
-        unmixing_weights = np.zeros((white_sig.shape[0], self.ica_n_iter))
+        sources = np.zeros((self.ica_iterations, sig.shape[1]))
+        spikes = {i: [] for i in range(self.ica_iterations)}
+        sil = np.zeros(self.ica_iterations)
+        cov_isi = np.zeros(self.ica_iterations)
+        unmixing_weights = np.zeros((white_sig.shape[0], self.ica_iterations))
 
-        if self.opt_initalization == "activity_idx":
+        if self.ica_initalization == "activity_idx":
             act_idx_histoty = np.array([])
 
         # Loop over each MU
-        for i in range(self.ica_n_iter):
+        for i in range(self.ica_iterations):
             # Initalize
-            if self.opt_initalization == "random":
+            if self.ica_initalization == "random":
                 w = np.random.randn(white_sig.shape[0])
-            elif self.opt_initalization == "activity_idx":
+            elif self.ica_initalization == "activity_idx":
                 col_norms = np.linalg.norm(white_sig, axis=0)
                 col_norms[act_idx_histoty.astype(int)] = 0
                 best_idx = np.argmax(col_norms)
@@ -265,7 +265,7 @@ class CBSS:
             # Predict source and estimate the source quality
             sources[i, :] = w.T @ white_sig
             spikes[i], sil[i] = est_spike_times(
-                sources[i, :], fsamp, cluster=self.cluster_method
+                sources[i, :], fsamp, cluster=self.spike_cluster_method
             )
             cov_isi[i] = self._calc_cov_isi(spikes[i], fsamp)
             print(f"Iteration {i}:")
@@ -280,7 +280,7 @@ class CBSS:
                 )
                 sources[i, :] = w.T @ white_sig
                 spikes[i], sil[i] = est_spike_times(
-                    sources[i, :], fsamp, cluster=self.cluster_method
+                    sources[i, :], fsamp, cluster=self.spike_cluster_method
                 )
                 cov_isi[i] = self._calc_cov_isi(spikes[i], fsamp)
                 print(f"    - Number of refinement iterations: {k2}")
@@ -345,32 +345,35 @@ class CBSS:
                 Number of iterations taken
         """
 
-        delta = np.ones(self.opt_max_iter)
+        if self.ica_orthogonalization == "projection_deflation":
+            P = B @ B.T
+
+        delta = np.ones(self.ica_max_iter)
         k = 0
 
-        while delta[k] > self.opt_tol and k < self.opt_max_iter - 1:
+        while delta[k] > self.ica_tol and k < self.ica_max_iter - 1:
             w_last = w.copy()
 
             wTX = w.T @ X  # shape: (n_samples,)
             # First derivative G'(x)
             g = (
-                (epsilon + wTX**2) ** ((self.opt_function_exp - 3) / 2) 
-                * (self.opt_function_exp * wTX**2 + epsilon)
+                (epsilon + wTX**2) ** ((self.ica_opt_fun_exp - 3) / 2) 
+                * (self.ica_opt_fun_exp * wTX**2 + epsilon)
             )
             # Second derivative G''(x)
             gp = (
-                (self.opt_function_exp - 1)
+                (self.ica_opt_fun_exp - 1)
                 * wTX
-                * (epsilon + wTX**2) ** ((self.opt_function_exp - 5) / 2)
-                * (self.opt_function_exp * wTX**2 + 3 * epsilon)
+                * (epsilon + wTX**2) ** ((self.ica_opt_fun_exp - 5) / 2)
+                * (self.ica_opt_fun_exp * wTX**2 + 3 * epsilon)
             )
             A = np.mean(gp)
             w = np.mean(X * g, axis=1) - A * w  # shape: (n_channels,)
 
             # Orthogonalization step
-            if self.source_deflation == "projection_deflation":
-                w = w - (B @ B.T) @ w
-            elif self.source_deflation == "gram-schmidt":
+            if self.ica_orthogonalization == "projection_deflation":
+                w = w - P @ w
+            elif self.ica_orthogonalization == "gram-schmidt":
                 w = gram_schmidt(w, B)
             else:
                 pass
@@ -417,7 +420,9 @@ class CBSS:
 
         while score < score_last and k < self.refinement_max_iter:
             source = w.T @ X
-            spikes, sil = est_spike_times(source, fsamp)
+            spikes, sil = est_spike_times(
+                source, fsamp, cluster=self.spike_cluster_method
+            )
             score_last = score
             cov_isi = self._calc_cov_isi(spikes, fsamp)
             score = self._get_refinement_loss(sil, cov_isi)
