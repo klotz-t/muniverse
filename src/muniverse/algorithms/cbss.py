@@ -68,7 +68,7 @@ class CBSS:
             sil_th: float = 0.9,
             cov_th: float = 0.35,
             refinement_loop: bool = True,
-            refinement_metric: Literal["cov_isi", "sil"] = "cov_isi", 
+            refinement_loss: Literal["cov_isi", "sil"] = "cov_isi", 
             refinement_max_iter: int = 100,
             refinement_min_spikes: int = 10,
             unmixing_format: Literal["white", "ext"] = "white",
@@ -102,7 +102,7 @@ class CBSS:
         self.random_seed = random_seed
         self.refinement_loop = refinement_loop
         self.refinement_min_spikes = refinement_min_spikes
-        self.refinement_metric = refinement_metric
+        self.refinement_loss = refinement_loss
         self.refinement_max_iter = refinement_max_iter
         self.sil_th = sil_th
         self.cov_th = cov_th
@@ -233,7 +233,7 @@ class CBSS:
             # Self supervised refinement loop
             if len(spikes[i]) > self.refinement_min_spikes and self.refinement_loop:
                 w, k2 = self._self_supervised_refinement(
-                    w, white_sig, cov_isi[i], sil[i], fsamp
+                    w, white_sig, sil[i], cov_isi[i], fsamp
                 )
                 sources[i, :] = w.T @ white_sig
                 spikes[i], sil[i] = est_spike_times(
@@ -281,6 +281,9 @@ class CBSS:
     def _fixed_point_alg(self, w, X, B, epsilon=1e-3):
         """
         Fixed-point optimization to maximize sparseness of a source signal.
+        The optimization function is G(x)= x * (x^2+epsilon)^{(a-1)/2} that represents 
+        a smooth approximation of G(x) = sign(x) * abs(x)^a.
+        For a = 3 this is equvivalent to maximizing skewness.
 
         Args:
             w (np.ndarray): Initial weight vector (n_channels,)
@@ -292,9 +295,6 @@ class CBSS:
             k (int): Number of iterations taken
         """
 
-        # Define contrast function and its derivative
-        # Use g(x)=x*(x**2+epsilon)**((a-1)/2) as smooth approximation of g(x) = sign(x) * abs(x)**a
-
         delta = np.ones(self.opt_max_iter)
         k = 0
 
@@ -302,10 +302,12 @@ class CBSS:
             w_last = w.copy()
 
             wTX = w.T @ X  # shape: (n_samples,)
+            # First derivative G'(x)
             g = (
                 (epsilon + wTX**2) ** ((self.opt_function_exp - 3) / 2) 
                 * (self.opt_function_exp * wTX**2 + epsilon)
             )
+            # Second derivative G''(x)
             gp = (
                 (self.opt_function_exp - 1)
                 * wTX
@@ -332,30 +334,28 @@ class CBSS:
 
         return w, k
 
-    def _self_supervised_refinement(self, w, X, cov_isi, sil, fsamp):
+    def _self_supervised_refinement(self, w, X, sil, cov_isi, fsamp):
         """
         Iterativly update a motor unit filter given a set of motor neuron
         spike times as long as the coefficient of variance of the interspike
         intervall decreases.
 
-        Args:
+        Args
+        ----
             w (np.ndarray): Initial weight vector
             X (np.ndarray): Whitened signal matrix (n_channels x n_samples)
             cov (float): Coefficient of variance of the initial source
             fsamp (float): Sampling rate in Hz
 
-        Returns:
+        Returns
+        -------
             w (np.ndarray): Optimized weight vector
 
         """
 
-        if self.refinement_metric == "cov_isi":
-            score = cov_isi 
-        else:
-            score = 1 - sil
-
+        # Init the optimization
+        score = self._get_refinement_loss(sil, cov_isi)
         score_last = score + 1
-
         k = 0
 
         while score < score_last and k < self.refinement_max_iter:
@@ -363,10 +363,7 @@ class CBSS:
             spikes, sil = est_spike_times(source, fsamp)
             score_last = score
             cov_isi = self._calc_cov_isi(spikes, fsamp)
-            if self.refinement_metric == "cov_isi":
-                score = cov_isi 
-            else:
-                score = 1 - sil
+            score = self._get_refinement_loss(sil, cov_isi)
             w = np.mean(X[:, spikes], axis=1)
             w = w / np.linalg.norm(w)
             k += 1
@@ -387,6 +384,19 @@ class CBSS:
             cov_isi = np.inf
 
         return cov_isi
+    
+    def _get_refinement_loss(self, sil, cov_isi):
+        """
+        Helper function to compute the loss in the refinement loop
+        
+        """
+
+        if self.refinement_loss == "cov_isi":
+            score = cov_isi
+        else:
+            score = 1 - sil
+
+        return score
 
 
     def _write_pipeline_sidecar(self):
