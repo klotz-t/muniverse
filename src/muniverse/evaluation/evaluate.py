@@ -4,20 +4,34 @@ from scipy.signal import convolve, correlate, correlation_lags, find_peaks
 from scipy.stats import kurtosis, skew
 
 
-def match_spikes(s1, s2, shift=0, tol=0.001):
+def match_spikes(
+        s1, 
+        s2, 
+        shift=0, 
+        tol=0.001
+):
     """
     Match spike times of two neurons given time shift and tolerance.
 
-    Args:
-        - s1 (ndarray): Spike times of the first neuron (in seconds)
-        - s2 (ndarray): Spike times of the second neuron (in seconds)
-        - shift (float): Temporal delay between the spiking neuron activity (in seconds)
-        - tol (float): Common spikes are in a window [spike-tol, spike+tol]
+    Args
+    ----
+        s1 : np.ndarray 
+            Spike times of the first neuron (in seconds)
+        s2 : np.ndarray 
+            Spike times of the second neuron (in seconds)
+        shift : int 
+            Delay between the spike trains (in seconds)
+        tol : float 
+            Common spikes are in a window [spike-tol, spike+tol] 
 
-    Returns:
-        - tp (float): Number of true positive spikes
-        - fp (float): Number of false positive spikes
-        - fn (float): Number of false negative spikes
+    Returns
+    -------
+        tp : int 
+            Number of true positive spikes
+        fp : int 
+            Number of false positive spikes
+        fn : int 
+            Number of false negative spikes
 
     """
 
@@ -46,21 +60,37 @@ def match_spikes(s1, s2, shift=0, tol=0.001):
     return tp, fp, fn
 
 
-def match_spike_trains(s1, s2, shift=0, tol=0.001, fsamp=10000):
+def match_spike_trains(
+        s1: np.ndarray, 
+        s2: np.ndarray, 
+        shift: float = 0, 
+        tol: float = 0.001, 
+        fsamp: float = 10000
+) -> tuple[int, int, int]:
     """
     Match spike trains of two neurons given sample shift and tolerance.
 
-    Args:
-        - s1 (ndarray): Binary spike train of the first neuron
-        - s2 (ndarray): Binary spike train of the second neuron
-        - shift (int): Delay between the spike trains (in samples)
-        - tol (float): Common spikes are in a window [spike-tol, spike+tol] (unit: seconds)
-        - fsamp (float): Sampling frequency in Hz
+    Args
+    ----
+        s1 : np.ndarray 
+            Binary spike train of the first neuron
+        s2 : np.ndarray 
+            Binary spike train of the second neuron
+        shift : int 
+            Delay between the spike trains (in samples)
+        tol : float 
+            Common spikes are in a window [spike-tol, spike+tol] (unit: seconds)
+        fsamp  : float 
+            Sampling frequency in Hz
 
-    Returns:
-        - tp (int): Number of true positive spikes
-        - fp (int): Number of false positive spikes
-        - fn (int): Number of false negative spikes
+    Returns
+    -------
+        tp : int 
+            Number of true positive spikes
+        fp : int 
+            Number of false positive spikes
+        fn : int 
+            Number of false negative spikes
 
     """
 
@@ -144,9 +174,8 @@ def bin_spikes(
 def best_time_shift(
     spikes1, spikes2, tolerance=0.001, max_shift=0.01, shift_step=0.0005
 ):
-    """
-    Try multiple time shifts and return the one with maximum TP.
-    """
+    """ Try multiple time shifts and return the one with maximum TP """
+    
     best_tp = 0
     best_shift = 0.0
     best_fp, best_fn = 0, 0
@@ -266,20 +295,30 @@ def label_sources(
 
 
 def signal_based_quality_metrics(
-    source, spikes, fsamp, min_peak_dist=0.01, match_dist=0.001
-):
+    source: np.ndarray, 
+    spikes: np.ndarray, 
+    fsamp: float, 
+    min_peak_dist: float = 0.01, 
+    match_dist: float = 0.001
+) -> dict:
     """
     Compute a set of signal based quality metrics
 
     Args:
-        - source (ndarray): The predicted source
-        - spikes (ndarray): Indices of the predicted spikes
-        - fsamp : float Sampling frequency (Hz).
-        - min_peak_distance_ms (float): Minimum distance between peaks (for peak detection), in seconds.
-        - match_dist (float): Window size (± s) around predicted spikes to exclude from background.
+        source : np.ndarray 
+            The predicted source
+        spikes : np.ndarray 
+            Indices of the predicted spikes
+        fsamp : float Sampling frequency (Hz).
+        min_peak_dist : float 
+            Minimum distance between peaks (for peak detection) in seconds.
+        match_dist : float 
+            Window size (±) around predicted spikes to exclude from background.
 
     Returns
-        - quality_metrics (dict): Dictonary of source quality metrics
+    -------
+        quality_metrics : dict 
+            Dictonary of source quality metrics
 
     """
 
@@ -328,22 +367,38 @@ def signal_based_quality_metrics(
     return quality_metrics
 
 
-def pseudo_sil_score(source, spikes, fsamp, min_peak_dist=0.01, match_dist=0.001):
+def pseudo_sil_score(
+        source: np.ndarray, # (n_samples, ) 
+        spikes: np.ndarray, # (n_spikes, ) 
+        fsamp: float, 
+        min_peak_dist: float = 0.01, 
+        match_dist: float = 0.001
+) -> tuple[float, np.ndarray, tuple]:
     """
     Computes a silhouette-like quality score for predicted spikes based on
     peak detection and background spike amplitudes.
 
-    Args:
-        - source (np.ndarray): The source signal.
-        - predicted_spikes (np.ndarray): Indices of predicted spike times.
-        - fsamp : float Sampling frequency (Hz).
-        - min_peak_distance_ms (float): Minimum distance between peaks (for peak detection), in seconds.
-        - match_dist (float): Window size (± s) around predicted spikes to exclude from background.
+    Args
+    ----
+        source : np.ndarray 
+            The predicted spiky source signal
+        redicted_spikes : np.ndarray 
+            Indices of predicted spike times
+        fsamp : float 
+            Sampling frequency in Hz
+        min_peak_distance_ms : float 
+            Minimum distance between peaks (for peak detection) in seconds
+        match_dist : float 
+            Window size (± s) around predicted spikes to exclude from background.
 
-    Returns:
-        - sil (float): Silhouette-like quality score.
-        - background_spikes (ndarray): Indices of the background spikes
-        - centroids (tuple): Centrodis of the peak and noise cluster
+    Returns
+    -------
+        sil : float 
+            Silhouette-like quality score
+        background_spikes : np.ndarray 
+            Indices of the background spikes
+        centroids : tuple 
+            Centrodis of the peak and noise cluster
     """
 
     spikes = np.asarray(spikes, dtype=int)
@@ -378,18 +433,28 @@ def pseudo_sil_score(source, spikes, fsamp, min_peak_dist=0.01, match_dist=0.001
     return sil, background_spikes
 
 
-def calc_pnr(source, spikes_idx):
+def calc_pnr(
+        source: np.ndarray, # (n_samples, ) 
+        spikes_idx: np.ndarray # (n_spikes, ) 
+):
     """
     Calculate the pulse-to-noise ratio, i.e., a logarithmic measure of the amplitude of the
     spike cluster compared to the background noise in a source.
 
-    Args:
-        - source (ndarray): Source predicted by a decomposition
-        - spikes_idx (ndarray): Array of spike indices predicted by a decomposition
+    Args
+    ----
+        source : np.ndarray 
+            The predicted spiky source signal
+        spikes_idx : np.ndarray 
+            Array of spike indices predicted by a decomposition
 
-    Returns:
-        - pnr (float): Pulse-to-noise ratio of a source
-        - noise_indices (ndarray): Array of indices associated with noise
+    Returns
+    -------
+        pnr : float 
+            Pulse-to-noise ratio of a source
+        noise_indices : np.ndarray 
+            Array of indices associated with noise
+
     """
 
     # Calculate PNR
@@ -416,18 +481,27 @@ def calc_pnr(source, spikes_idx):
     return pnr, noise_indices
 
 
-def get_basic_spike_statistics(spike_times, min_num_spikes=10):
+def get_basic_spike_statistics(
+        spike_times: np.ndarray, 
+        min_num_spikes: int = 10
+) -> tuple[float, float]:
     """
     Compute the mean firing rate (Hz) and the coefficient of variation
     of the interspike intervalls given a spike train
 
-    Args:
-        - spike_times (ndarray): Array of spike times (in seconds)
-        - min_num_spikes (int): Minimum number of spikes required for the analysis
+    Args
+    ----
+        spike_times : np.ndarray
+            Array of spike times (in seconds)
+        min_num_spikes : int 
+            Minimum number of spikes required for the analysis
 
-    Returns:
-        - cov (float): Coefficient of variation of the interspike intervalls
-        - mean_fr (float): Mean discharge rate of the neuron
+    Returns
+    -------
+        cov : float 
+            Coefficient of variation of the interspike intervalls
+        mean_fr : float 
+            Mean discharge rate of the neuron
 
     """
 
