@@ -238,8 +238,12 @@ class CBSS:
         # Initalize the output variables
         sources = np.zeros((self.ica_iterations, sig.shape[1]))
         spikes = {i: [] for i in range(self.ica_iterations)}
-        sil = np.zeros(self.ica_iterations)
-        cov_isi = np.zeros(self.ica_iterations)
+        scores = {
+            "sil": np.zeros(self.ica_iterations),
+            "cov_isi": np.zeros(self.ica_iterations),
+        }
+        #sil = np.zeros(self.ica_iterations)
+        #cov_isi = np.zeros(self.ica_iterations)
         unmixing_weights = np.zeros((white_sig.shape[0], self.ica_iterations))
 
         if self.ica_initalization == "activity_idx":
@@ -264,44 +268,49 @@ class CBSS:
 
             # Predict source and estimate the source quality
             sources[i, :] = w.T @ white_sig
-            spikes[i], sil[i] = est_spike_times(
+            spikes[i], scores["sil"][i] = est_spike_times(
                 sources[i, :], fsamp, cluster=self.spike_cluster_method
             )
-            cov_isi[i] = self._calc_cov_isi(spikes[i], fsamp)
-            print(f"Iteration {i}:")
-            print(f"  - Number of fixed point iterations: {k1}")
-            print(f"  - SIL: {sil[i]}")
-            print(f"  - cov_isi: {cov_isi[i]}")
+            scores["cov_isi"][i] = self._calc_cov_isi(spikes[i], fsamp)
+            print(f'Iteration {i}:')
+            print(f'  - Number of fixed point iterations: {k1}')
+            print(f'  - SIL: {scores["sil"][i]}')
+            print(f'  - cov_isi: {scores["cov_isi"][i]}')
 
             # Self supervised refinement loop
             if len(spikes[i]) > self.refinement_min_spikes and self.refinement_loop:
+                scores_i = {k: v[i] for k, v in scores.items()}
                 w, k2 = self._self_supervised_refinement(
-                    w, white_sig, sil[i], cov_isi[i], fsamp
+                    w, white_sig, scores_i, fsamp
                 )
                 sources[i, :] = w.T @ white_sig
-                spikes[i], sil[i] = est_spike_times(
+                spikes[i], scores["sil"][i] = est_spike_times(
                     sources[i, :], fsamp, cluster=self.spike_cluster_method
                 )
-                cov_isi[i] = self._calc_cov_isi(spikes[i], fsamp)
-                print(f"    - Number of refinement iterations: {k2}")
-                print(f"    - SIL: {sil[i]}")
-                print(f"    - cov_isi: {cov_isi[i]}")
+                scores["cov_isi"][i] = self._calc_cov_isi(spikes[i], fsamp)
+                print(f'    - Number of refinement iterations: {k2}')
+                print(f'    - SIL: {scores["sil"][i]}')
+                print(f'    - cov_isi: {scores["cov_isi"][i]}')
 
             # Save the optimized unmixing weights
             unmixing_weights[:, i] = w
 
             # Peel-off the detected source
-            if self.peel_off and sil[i] > self.sil_th and cov_isi[i] < self.cov_th:
+            if (
+                self.peel_off 
+                and scores["sil"][i] > self.sil_th 
+                and scores["cov_isi"][i] < self.cov_th
+                ):
                 white_sig, _, _ = peel_off(
                     white_sig, spikes[i], win=self.peel_off_window, fsamp=fsamp
                 )
-                print("    Peel off: True")
+                print('    Peel off: True')
 
         # Remove duplicates
-        sources, spikes, sil, unmixing_weights = remove_duplicates(
+        sources, spikes, scores["sil"], unmixing_weights = remove_duplicates(
             sources,
             spikes,
-            sil,
+            scores["sil"],
             unmixing_weights,
             fsamp,
             max_shift=self.match_max_shift,
@@ -310,16 +319,16 @@ class CBSS:
         )
 
         # Remove bad sources
-        sources, spikes, sil, unmixing_weights = remove_bad_sources(
+        sources, spikes, scores["sil"], unmixing_weights = remove_bad_sources(
             sources,
             spikes,
-            sil,
+            scores["sil"],
             unmixing_weights,
             threshold=self.sil_th,
             min_num_spikes=self.min_num_spikes,
         )
 
-        return sources, spikes, sil, unmixing_weights
+        return sources, spikes, scores["sil"], unmixing_weights
 
     def _fixed_point_alg(self, w, X, B, epsilon=1e-3):
         """
@@ -387,7 +396,7 @@ class CBSS:
 
         return w, k
 
-    def _self_supervised_refinement(self, w, X, sil, cov_isi, fsamp):
+    def _self_supervised_refinement(self, w, X, scores_i, fsamp):
         """
         Iterativly update a motor unit filter given a set of motor neuron
         spike times as long as the coefficient of variance of the interspike
@@ -399,10 +408,8 @@ class CBSS:
                 Initial unmixing weight vector
             X : np.ndarray 
                 Whitened signal matrix (n_channels x n_samples)
-            sil : float 
-                Silhouette score at initalization  
-            cov_isi : float 
-                ISI Coefficient of variance at initalization  
+            scores_i : dict 
+                Dictonary of quality scores at iteration i {"name": value}
             fsamp : float 
                 Sampling rate in Hz
 
@@ -414,7 +421,7 @@ class CBSS:
         """
 
         # Init the optimization
-        score = self._get_refinement_loss(sil, cov_isi)
+        score = self._get_refinement_loss(scores_i)
         score_last = score + 1
         k = 0
 
@@ -425,7 +432,11 @@ class CBSS:
             )
             score_last = score
             cov_isi = self._calc_cov_isi(spikes, fsamp)
-            score = self._get_refinement_loss(sil, cov_isi)
+            scores_i = {
+                "sil": sil, 
+                "cov_isi": cov_isi
+            }
+            score = self._get_refinement_loss(scores_i)
             w = np.mean(X[:, spikes], axis=1)
             w = w / np.linalg.norm(w)
             k += 1
@@ -459,7 +470,7 @@ class CBSS:
 
         return cov_isi
     
-    def _get_refinement_loss(self, sil, cov_isi):
+    def _get_refinement_loss(self, scores_i):
         """
         Helper function to compute the loss in the refinement loop
 
@@ -467,8 +478,8 @@ class CBSS:
         ----
             sil : float
                 Silhouette score
-            cov_isi: float
-                Coefficient of variation of the interspike intervalls
+            scores_i : dict 
+                Dictonary of quality scores at iteration i {"name": value}
 
         Returns
         -------
@@ -479,8 +490,8 @@ class CBSS:
         """
 
         if self.refinement_loss == "cov_isi":
-            score = cov_isi
+            score = scores_i["cov_isi"]
         else:
-            score = 1 - sil
+            score = 1 - scores_i["sil"]
 
         return score
