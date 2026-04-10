@@ -1,10 +1,14 @@
 import warnings
 import numpy as np
-from scipy.stats import zscore
 from scipy.signal import welch
 from pydantic import BaseModel, TypeAdapter, Field
 from typing import Literal, List, Union, Annotated
-from .core import bandpass_signals, notch_signals, highpass_signals, lowpass_signals
+from .core import (bandpass_signals, 
+                   notch_signals, 
+                   highpass_signals, 
+                   lowpass_signals,
+                   find_outliers
+                   )
 
 
 class pre_processing:
@@ -232,12 +236,24 @@ class pre_processing:
     _adapter = TypeAdapter(PreprocessStep)
 
     def add_step(self, step):
+        """ Add an additional post processing step"""
         
-        self.pre_process_steps.append(
+        self.steps.append(
             self._adapter.validate_python(step)
         )
 
-    def _get_scores(self, data, metric, bw=[20, 500]):
+    def _get_scores(
+            self, 
+            data: np.ndarray, # (n_channels, n_samples) 
+            metric: Literal["rms", "std", "medfreq", "medpower"], 
+            fsamp: float | None = 2048, 
+            bw: tuple | None = [20, 500]
+    ):
+        """
+        Calculate score for bad channel detection
+
+        
+        """
 
         METRICS = ["rms", "std", "medfreq", "medpower"]
                     
@@ -262,59 +278,25 @@ class pre_processing:
             )
         
         return score
-    
-    def _find_outliers(self, 
-                       x: np.ndarray, 
-                       threshold_value: float = 3, 
-                       max_iter: int = 3, 
-                       tail: Literal[-1,0,1] = 0
+
+    def _get_bad_channels(
+            self, 
+            score: np.ndarray, # (n_channels, ) 
+            mask: np.ndarray[bool], # (n_channels, )  
+            method: Literal["zscore", "threshold"], 
+            threshold_value: float, 
+            max_iter: int | None = 3, 
+            tail: Literal[-1, 0, 1] = 0
     ):
         """
-        Detect ouliers by comparing the z-score of variable x against
-        some threshold. This is repeaded until there are no outliers or
-        the maximum number of iterations is reached. 
+        Automatically detect bad channels
 
-        Args
-        ----
-            x (np.array): 
-                Array of scores (n_channels, )
-            threshold (float): 
-                Threshold for outlier detection
-            max_iter (int): 
-                Maximum number of iterations
-            tail (-1,0,1): 
-                Specify weather to serach for outliers on both ends (0), 
-                just on the positive side (1) or just the negative side (-1).
-
-        Return
-        ------
-            mask (np.array): Boolean mask (True: bad_channel, False: good_channel) 
-            
+        TODO
+        
         """
 
-        mask = np.zeros(len(x), dtype=bool)
-
-        iter = 0
-        while iter < max_iter:
-            xm = np.ma.masked_array(x, mask=mask)
-            if tail == 1:
-                idx = zscore(xm) > threshold_value
-            elif tail == -1:
-                idx = -zscore(xm) > threshold_value
-            else:
-                idx = np.abs(zscore(xm)) > threshold_value 
-            mask += idx
-            if not np.any(idx):
-                break
-            else:
-                iter = iter + 1  
-
-        return mask 
-
-    def _get_bad_channels(self, score, mask, method, threshold_value, max_iter=3, tail=0):
-
         if method == "zscore":
-            mask = self._find_outliers(score, threshold_value, max_iter=max_iter, tail=tail)
+            mask = find_outliers(score, threshold_value, max_iter=max_iter, tail=tail)
         elif method == "threshold":
             if tail == 1:
                 mask = score > threshold_value
@@ -332,9 +314,10 @@ class pre_processing:
 
         return mask             
 
-    def pre_process(self, 
-                    data: np.ndarray, # (n_channels x n_samples)
-                    fsamp: float = 2048,
+    def pre_process(
+            self, 
+            data: np.ndarray, # (n_channels x n_samples)
+            fsamp: float = 2048,
     ):
         
         """
