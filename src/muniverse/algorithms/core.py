@@ -10,13 +10,14 @@ from sklearn.cluster import KMeans
 from ..evaluation.evaluate import *
 
 
-def bandpass_signals(data: np.ndarray, # (n_channels x n_samples)
-                     fsamp: float, 
-                     high_pass: float = 20, 
-                     low_pass: float = 500, 
-                     method: Literal["butter", "firwin2"] = "butter",
-                     order: int | None = 2, 
-                     numtabs: int | None = 101,
+def bandpass_signals(
+        data: np.ndarray, # (n_channels x n_samples)
+        fsamp: float, 
+        high_pass: float = 20, 
+        low_pass: float = 500, 
+        method: Literal["butter", "firwin2"] = "butter",
+        order: int | None = 2, 
+        numtabs: int | None = 101,
 ) -> np.ndarray:
     """
     Bandpass filter timeseries data using a digital infinite 
@@ -80,13 +81,13 @@ def bandpass_signals(data: np.ndarray, # (n_channels x n_samples)
     return data
 
 
-def highpass_signals(
-    data: np.ndarray,  # (n_channels x n_samples)
-    fsamp: float,
-    high_pass: float = 20,
-    method: Literal["butter", "firwin2"] = "butter",
-    order: int | None = 2,
-    numtabs: int | None = 101,
+def highpass_signals( 
+        data: np.ndarray,  # (n_channels x n_samples)
+        fsamp: float,
+        high_pass: float = 20,
+        method: Literal["butter", "firwin2"] = "butter",
+        order: int | None = 2,
+        numtabs: int | None = 101,
 ) -> np.ndarray:
     """
     High-pass filter timeseries data using a digital infinite 
@@ -143,12 +144,12 @@ def highpass_signals(
     return data
 
 def lowpass_signals(
-    data: np.ndarray,  # (n_channels x n_samples)
-    fsamp: float,
-    low_pass: float = 500,
-    method: Literal["butter", "firwin2"] = "butter",
-    order: int | None = 2,
-    numtabs: int | None = 101,
+        data: np.ndarray,  # (n_channels x n_samples)
+        fsamp: float,
+        low_pass: float = 500,
+        method: Literal["butter", "firwin2"] = "butter",
+        order: int | None = 2,
+        numtabs: int | None = 101,
 ) -> np.ndarray:
     """
     Low-pass filter timeseries data using a digital infinite 
@@ -204,14 +205,15 @@ def lowpass_signals(
 
     return data
 
-def notch_signals(data: np.ndarray, 
-                  fsamp: float, 
-                  freqs: List[float] = [50, 100, 150], 
-                  method: Literal[
-                      "butter", "iirnotch", "fft_nulling", "fft_interpolation"
-                  ] = "butter", 
-                  order: int | None = 2, 
-                  dfreq: int | None = 1,
+def notch_signals(
+        data: np.ndarray, 
+        fsamp: float, 
+        freqs: List[float] = [50, 100, 150], 
+        method: Literal[
+            "butter", "iirnotch", "fft_nulling", "fft_interpolation"
+        ] = "butter", 
+        order: int | None = 2, 
+        dfreq: int | None = 1,
     ) -> np.ndarray:
     """
     Notch filter (stop band) time series data using either a infinite impulse 
@@ -350,12 +352,13 @@ def notch_signals(data: np.ndarray,
 
     return data
 
-def find_outliers(x: np.ndarray, # (n_features, )
-                  threshold: float = 3, 
-                  max_iter: int = 3, 
-                  tail: Literal[-1,0,1] = 0,
-                  mask: np.ndarray | None = None
-):
+def find_outliers(
+        x: np.ndarray, # (n_features, )
+        threshold: float = 3, 
+        max_iter: int = 3, 
+        tail: Literal[-1,0,1] = 0,
+        mask: np.ndarray | None = None
+) -> np.ndarray:
     """
     Detect ouliers by comparing the z-score of variable x against
     some threshold. This is repeaded until there are no outliers or
@@ -404,8 +407,9 @@ def find_outliers(x: np.ndarray, # (n_features, )
 
     return mask  
 
-def extension(Y: np.ndarray, # (n_channels x n_samples)
-              R: int
+def extension(
+        Y: np.ndarray, # (n_channels x n_samples)
+        R: int
 ) -> np.ndarray:
     """
     Extend a multi-channel signal Y by an extension factor R
@@ -435,12 +439,13 @@ def extension(Y: np.ndarray, # (n_channels x n_samples)
     return eY
 
 
-def whitening(Y: np.ndarray, # (n_channels x n_samples)
-              method: Literal["ZCA", "PCA", "Cholesky"] = "ZCA", 
-              backend: Literal["ed", "svd"] = "ed", 
-              regularization: str | float | None = "auto", 
-              eps: Optional[float] = 1e-10
-):
+def whitening(
+        Y: np.ndarray, # (n_channels x n_samples)
+        method: Literal["ZCA", "PCA", "Cholesky"] = "ZCA", 
+        backend: Literal["ed", "svd"] = "ed", 
+        regularization: str | float | None = "auto", 
+        eps: Optional[float] = 1e-10
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Whiten data using the ZCA, PCA, or Cholesky method.
 
@@ -521,12 +526,13 @@ def whitening(Y: np.ndarray, # (n_channels x n_samples)
     return wY, Z
 
 
-def est_spike_times(sig: np.ndarray, # (n_samples, ) 
-                    fsamp: float, 
-                    cluster: Literal["kmeans"] = "kmeans", 
-                    a: float = 2, 
-                    min_delay: float = 0.01
-):
+def est_spike_times(
+        sig: np.ndarray, # (n_samples, ) 
+        fsamp: float, 
+        cluster: Literal["kmeans"] = "kmeans", 
+        a: float = 2, 
+        min_delay: float = 0.01
+) -> tuple[np.ndarray, float]:
     """
     Estimate spike indices given a spiky source signal and compute
     a silhouette-like metric for source quality quantification.
@@ -596,9 +602,10 @@ def est_spike_times(sig: np.ndarray, # (n_samples, )
     return est_spikes, sil
 
 
-def gram_schmidt(w: np.ndarray, # (n, )
-                 B: np.ndarray  # (n, k)
-):
+def gram_schmidt(
+        w: np.ndarray, # (n, )
+        B: np.ndarray  # (n, k)
+) -> np.ndarray:
     """
     Stabilized Gram-Schmidt orthogonalization.
 
@@ -741,11 +748,12 @@ def remove_bad_sources(
 
     return new_sources, new_spikes, new_sil, new_filters
 
-def spike_triggered_average(sig: np.ndarray, # (n_channels, n_samples) 
-                            spikes: np.ndarray, # (n_spikes, ) 
-                            win: float = 0.02, 
-                            fsamp: float = 2048
-):
+def spike_triggered_average(
+        sig: np.ndarray, # (n_channels, n_samples) 
+        spikes: np.ndarray, # (n_spikes, ) 
+        win: float = 0.02, 
+        fsamp: float = 2048
+) -> np.ndarray:
     """
     Estimate the impulse response of a finite impulse response filters 
     given the time samples of the events.
@@ -782,11 +790,12 @@ def spike_triggered_average(sig: np.ndarray, # (n_channels, n_samples)
     return waveform
 
 
-def peel_off(sig: np.ndarray, # (n_channels, n_samples) 
-                            spikes: np.ndarray, # (n_spikes, ) 
-                            win: float = 0.02, 
-                            fsamp: float = 2048
-):
+def peel_off(
+        sig: np.ndarray, # (n_channels, n_samples) 
+        spikes: np.ndarray, # (n_spikes, ) 
+        win: float = 0.02, 
+        fsamp: float = 2048
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Peel off the signal contribution of a source with finite impulse
     response filter given the time stamps of the impulses (spikes) 
@@ -806,10 +815,12 @@ def peel_off(sig: np.ndarray, # (n_channels, n_samples)
 
     Returns
     -------
-        residual_sig : np.ndarray 
+        residual_sig : np.ndarray (n_channels, n_samples)
             Residual signal after removing component
-        comp_sig : np.ndarray 
+        comp_sig : np.ndarray (n_channels, n_samples)
             Estimated contribution of the given source
+        waveform : np.ndarray (n_channels, n_samples)
+            Impulse response of the given component    
     """
 
     waveform = spike_triggered_average(sig, spikes, win, fsamp)
@@ -847,7 +858,7 @@ def peel_off(sig: np.ndarray, # (n_channels, n_samples)
 
 def spike_dict_to_long_df(spike_dict: dict, 
                           fsamp: float = 2048
-):
+) -> pd.DataFrame:
     """
     Convert a dictionary of spike instances into a long-formatted DataFrame.
 
