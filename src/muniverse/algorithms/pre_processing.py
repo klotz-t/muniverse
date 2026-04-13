@@ -3,12 +3,13 @@ import numpy as np
 from scipy.signal import welch
 from pydantic import BaseModel, TypeAdapter, Field
 from typing import Literal, List, Union, Annotated
-from .core import (bandpass_signals, 
-                   notch_signals, 
-                   highpass_signals, 
-                   lowpass_signals,
-                   find_outliers
-                   )
+from .core import (
+    bandpass_signals, 
+    notch_signals, 
+    highpass_signals, 
+    lowpass_signals,
+    find_outliers
+)
 
 
 class pre_processing:
@@ -89,7 +90,7 @@ class pre_processing:
 
             {
                 "step": "bad_channel_detection",
-                "metric": Literal["std", "rms"],
+                "metric": Literal["std", "rms", "medfreq", "medpower"],
                 "window": (t0, t1) | None, # Given in seconds, if None consider the full data
                 "method": "zscore" | "threshold",
                 "threshold_value": float,
@@ -200,7 +201,7 @@ class pre_processing:
 
     class BadChannelDetection(BaseModel):
         step: Literal["bad_channel_detection"]
-        metric: Literal["std", "rms"]
+        metric: Literal["std", "rms", "medfreq", "medpower"]
         window: tuple[float, float] | None = None
         method: Literal["zscore", "threshold"] = "zscore"
         threshold_value: float = 3
@@ -262,15 +263,16 @@ class pre_processing:
         elif metric == "std":
             score = np.std(data, axis=1)
         elif metric == "medfreq":
-            freqs, psd = welch(data, fs=self.fsamp, nperseg=self.fsamp/2)
-            cumulative = np.cumsum(psd)
-            total = cumulative[-1]
-            idx = np.where(cumulative >= total / 2)[0][0]
-            score = freqs[idx]
+            psd, freqs = welch(data, fs=fsamp, nperseg=fsamp, noverlap=fsamp/2)
+            idx = np.where((freqs > bw[0]) & (freqs < bw[1]))[0]
+            cumulative = np.cumsum(psd[:, idx], axis=1)
+            total = cumulative[:, -1][:, None]
+            med_idx = np.argmax(cumulative >= total / 2, axis=1)
+            score = freqs[med_idx]
         elif metric == "medpower":
-            freqs, psd = welch(data, fs=self.fsamp, nperseg=self.fsamp/2)
-            total = cumulative[-1]
-            score = np.median(psd, axis=1)
+            psd, freqs = welch(data, fs=fsamp, nperseg=fsamp, noverlap=fsamp/2)
+            idx = np.where((freqs > bw[0]) & (freqs < bw[1]))[0]
+            score = np.median(psd[:,idx], axis=1)
         else:
             raise ValueError(
                 f"Invalid metric {metric}"
