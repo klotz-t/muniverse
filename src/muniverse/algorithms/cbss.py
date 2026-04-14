@@ -1,13 +1,38 @@
 import numpy as np
 from typing import List, Literal, Optional
-from .core import bandpass_signals, notch_signals, extension, whitening, est_spike_times, remove_duplicates, remove_bad_sources, gram_schmidt, peel_off
+from .core import (
+    bandpass_signals, 
+    notch_signals, 
+    extension, 
+    whitening, 
+    est_spike_times, 
+    remove_duplicates, 
+    remove_bad_sources, 
+    gram_schmidt, 
+    peel_off
+)
 
 class CBSS:
     """
-    Class implementing convolutive blind source separation (CBSS) to identify the
-    spiking activity of motor neurons using the fastICA algorithm.
+    Class implementing convolutive blind source separation (CBSS) 
+    to identify the spiking activity of motor neurons given
+    multi-channel EMG data. The algorithm performs the following steps:
 
-    Parameters
+    - Transform the convolutive mixture into an instantaneous mixture 
+    by adding R delayed copies of the input signal
+    - Apply a whitening transformation to the extended signals to 
+    obtain data with unit variance
+    - Sequentially optimize the unmixing weights using the fastICA 
+    algorithm
+        - Run a fixed-point algorithm maximizing non-gaussianity of
+        the sources
+        - Extract the motor unit spikes using peak-detection and 
+        kmeans-based spike clustering
+        - Refine the learned weights through self-supervised 
+        learning (optional)
+        - Peel-off the contribution of detected sources (optional)
+
+    Properties
     ----------
         random_seed : int , default 1909 
             Seed of the random number generator.
@@ -132,6 +157,7 @@ class CBSS:
         self.peel_off_window = peel_off_window
         self.sil_th = sil_th
         self.cov_th = cov_th
+        self.unmixing_format = unmixing_format
         self.verbose = verbose
 
         self.min_num_spikes = 10
@@ -184,7 +210,7 @@ class CBSS:
         Returns
         -------
             sources : np.ndarray 
-                Estimated spike responses (n_components x n_samples)
+                Estimated sources / ica components (n_components x n_samples)
             spikes : dict 
                 Sample indices of motor neuron discharges
             sil : np.ndarray 
@@ -328,13 +354,88 @@ class CBSS:
             min_num_spikes=self.min_num_spikes,
         )
 
+        if self.unmixing_format == "ext":
+            unmixing_weights = np.linalg.pinv(Z) @ unmixing_weights
+
         return sources, spikes, scores["sil"], unmixing_weights
+
+    def predict(
+            self, 
+            sig: np.ndarray, # (n_channels x n_samples)
+            fsamp: float, 
+            unmixing_weights: np.ndarray # (n_features x n_sources)
+    ):
+        """
+        Predict motor unit spike trains given multi-channel 
+        EMG data using your learned unmixing weights.
+
+        Args
+        ----
+            sig : np.ndarray 
+                Input (EMG) signal (n_channels x n_samples)
+            fsamp : float 
+                Sampling frequency in Hz
+            unmixing_weights : np.ndarray 
+                Learned weights of the unmixing matrix    
+
+        Returns
+        -------
+            sources : np.ndarray 
+                Estimated sources / ica components (n_components x n_samples)
+            spikes : dict 
+                Sample indices of motor neuron discharges
+            sil : np.ndarray 
+                Pseudo-silhouette scores of the estimated sources
+        
+        """
+
+        # Extend signals and subtract the mean and cut the edges
+        print("Extension:")
+        ext_sig = extension(sig, self.ext_fact)
+        ext_sig -= np.mean(ext_sig, axis=1, keepdims=True)
+        # Remove the edges from the exteneded signal
+        ext_sig[:, : self.ext_fact * 2] = 0
+        ext_sig[:, -self.ext_fact * 2 :] = 0
+
+        if self.unmixing_format == "white":
+            # Whiten the extended signals
+            print("Whitening:")
+            white_sig, Z = whitening(
+                Y=ext_sig, 
+                method=self.whitening_method
+            )
+
+            sources = unmixing_weights.T @ white_sig
+
+        elif self.unmixing_format == "ext":
+            covariance = ext_sig @ ext_sig.T / (ext_sig.shape[1] - 1)
+            sources = unmixing_weights.T @ np.linalg.pinv(covariance) @ ext_sig  
+        else:
+            raise ValueError(
+                f"Your unmixing_format is {self.unmixing_format}"
+                "Must be one of 'white' or 'ext'"
+            )
+
+        spikes = {}
+        scores = {
+            "sil": np.zeros(sources.shape[0]),
+            "cov_isi": np.zeros(sources.shape[0]),
+        }
+        for i in range(sources.shape[0]):
+            spikes[i], scores["sil"][i] = est_spike_times(
+                    sources[i, :], fsamp, cluster=self.spike_cluster_method
+                )
+            scores["cov_isi"][i] = self._calc_cov_isi(spikes[i], fsamp)
+
+        return sources, spikes, scores["sil"]
 
     def _fixed_point_alg(self, w, X, B, epsilon=1e-3):
         """
-        Fixed-point optimization to maximize sparseness of a source signal.
-        The optimization function is G(x)= x * (x^2+epsilon)^{(a-1)/2} that represents 
-        a smooth approximation of G(x) = sign(x) * abs(x)^a.
+        Fixed-point algorithm to maximize sparseness of a source signal.
+        The optimization function is 
+            G(x)= x * (x^2+epsilon)^{(a-1)/2} ,
+        that represents a smooth approximation of 
+            G(x) = sign(x) * abs(x)^a .
         For a = 3 this is equvivalent to maximizing skewness.
 
         Args
@@ -444,23 +545,7 @@ class CBSS:
         return w, k
     
     def _calc_cov_isi(self, spikes, fsamp):
-        """
-        Helper function to calculate the coefficent of varation
-        of the interspike intervalls
-
-        Args
-        ----
-            spikes : list of int
-                List of spike times (in samples)
-            fsamp: float
-                Sampling rate in Hz
-
-        Returns
-        -------
-            cov_isi : float
-                Coefficient of variation of the interspike intervalls
-        
-        """
+        """ Get the coefficent of varation of the interspike intervalls """
 
         if len(spikes) > 2:
             isi = np.diff(spikes / fsamp)
@@ -471,23 +556,7 @@ class CBSS:
         return cov_isi
     
     def _get_refinement_loss(self, scores_i):
-        """
-        Helper function to compute the loss in the refinement loop
-
-        Args
-        ----
-            sil : float
-                Silhouette score
-            scores_i : dict 
-                Dictonary of quality scores at iteration i {"name": value}
-
-        Returns
-        -------
-            score : float
-                Score with respect to the specified metric
-
-        
-        """
+        """ Compute the loss in the refinement loop """
 
         if self.refinement_loss == "cov_isi":
             score = scores_i["cov_isi"]
