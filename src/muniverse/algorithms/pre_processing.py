@@ -1,5 +1,6 @@
 import warnings
 import numpy as np
+import pandas as pd
 from scipy.signal import welch
 from pydantic import BaseModel, TypeAdapter, Field
 from typing import Literal, List, Union, Annotated
@@ -201,12 +202,13 @@ class pre_processing:
 
     class BadChannelDetection(BaseModel):
         step: Literal["bad_channel_detection"]
-        metric: Literal["std", "rms", "medfreq", "medpower"]
-        window: tuple[float, float] | None = None
+        metric: Literal["std", "rms", "medfreq", "medpower", "cumpower"]
         method: Literal["zscore", "threshold"] = "zscore"
         threshold_value: float = 3
-        max_iter: int = 3
-        tail: Literal[-1, 0, 1] = 0    
+        max_iter: int | None = 3
+        tail: Literal[-1, 0, 1] = 0 
+        window: tuple[float, float] | None = None
+        bandwidth: tuple[float, float] | None = None   
 
     class MaskChannels(BaseModel):
         step: Literal["mask_channels"]
@@ -214,7 +216,7 @@ class pre_processing:
 
     class Downsample(BaseModel):
         step: Literal["downsample"]
-        factor: int = 2
+        factor: int
 
     class TimeWindow(BaseModel):
         step: Literal["time_window"]
@@ -246,17 +248,38 @@ class pre_processing:
     def _get_scores(
             self, 
             data: np.ndarray, # (n_channels, n_samples) 
-            metric: Literal["rms", "std", "medfreq", "medpower"], 
+            metric: Literal[
+                "rms", "std", "medfreq", "medpower", "cumpower"
+            ], 
             fsamp: float | None = 2048, 
-            bw: tuple | None = [20, 500]
+            bw: tuple | None = (20, 500)
     ):
         """
-        Calculate score for bad channel detection
+        Calculate channel specific scores
 
+        Args
+        ----
+            data : np.ndarray (n_channels, n_samples)
+                time series data 
+            metric : {"rms", "std", "medfreq", "medpower", "cumpower"}
+                Specify the computed metric. Can be the root-mean-square ("rms"),
+                the standard deviation ("std"), the median frequency ("medfreq"),
+                the median power ("medpower") or the cumulative power ("cumpower")
+            fsamp : float
+                If your metric is "medfreq", "medpower", "cumpower" you need
+                to specify the sampling rate in Hz
+            bw : tuple of float
+                If your metric is "medfreq", "medpower", "cumpower" you need
+                to specify the considered bandwidth in Hz     
+
+        Returns
+        -------
+            score : np.ndarray
+                Array of score values (n_channels, )
         
         """
 
-        METRICS = ["rms", "std", "medfreq", "medpower"]
+        METRICS = ["rms", "std", "medfreq", "medpower", "cumpower"]
                     
         if metric == "rms":
             score = np.mean(data**2, axis=1)**0.5
@@ -273,6 +296,10 @@ class pre_processing:
             psd, freqs = welch(data, fs=fsamp, nperseg=fsamp, noverlap=fsamp/2)
             idx = np.where((freqs > bw[0]) & (freqs < bw[1]))[0]
             score = np.median(psd[:,idx], axis=1)
+        elif metric == "cumpower":
+            psd, freqs = welch(data, fs=fsamp, nperseg=fsamp, noverlap=fsamp/2)
+            idx = np.where((freqs > bw[0]) & (freqs < bw[1]))[0]
+            score = np.sum(psd[:,idx], axis=1)
         else:
             raise ValueError(
                 f"Invalid metric {metric}"
@@ -291,14 +318,39 @@ class pre_processing:
             tail: Literal[-1, 0, 1] = 0
     ):
         """
-        Automatically detect bad channels
+        Automatically detect bad channels based on the scores of
+        channel-specific metrics and a given threshold value. 
+        Either using a fixed threshold  (method = "threshold") or 
+        z-score normalized scores (method = "zscore").
 
-        TODO
+        Args
+        ----
+            score : np.ndarray
+                Channel-specific scores
+            mask : np.ndarry
+                Boolean mask of considered channels (True: not used, False: used)
+            method : {"zscore", "threshold"}
+                Method used for bad channel detection. If "zscore" 
+                scores are z-score normalized prior to thresholding.
+            threshold_value : float
+                Treshold for bad channel detection
+            tail : {-1, 0, 1}
+                If 1 flag all values above the threshold;
+                If -1 flag all values below the threshold;
+                If 0 (only availible if method = "zscore"), flag all 
+                channels with an absolute score above the threshold                    
+
+        Returns
+        -------
+            mask : np.ndarray of bool
+                Boolean mask (True: bad channel, False: good channel)
         
         """
 
         if method == "zscore":
-            mask = find_outliers(score, threshold_value, max_iter=max_iter, tail=tail)
+            mask = find_outliers(
+                score, threshold_value, max_iter=max_iter, tail=tail, mask=mask
+            )
         elif method == "threshold":
             if tail == 1:
                 mask = score > threshold_value
@@ -323,35 +375,49 @@ class pre_processing:
     ):
         
         """
-        Pre process multi-channel time series data using the 
+        Pre process multi-channel time EMG data using the 
         specified list of steps.
 
         Args
         ----
-            data (np.ndarray): Raw time series data (n_channels x n_samples)
-            fsamp (float): Sampling rate in Hz
+            data : np.ndarray (n_channels x n_samples)
+                Raw time series data 
+            fsamp : float 
+                Sampling rate in Hz
 
         Returns
         -------
-            data (np.ndarray): Pre-prcessed time series data (n_channels x n_samples)
-            metadata (dict): TODO    
+            data : np.ndarray (n_channels x n_samples)
+                Pre-prcessed time series data 
+            metadata : dict
+                Dictonary of process metadata 
+                - fsamp (float): Sampling rate in Hz
+                - ch_mask (np.ndarray): Boolean channel selection mask
+                - sample_mask (np.ndarray): Boolean sample selection mask
+                - ch_status (pd.DataFrame): Channel status 
+            steps : list
+                List of the applied processing steps       
         
         """
 
+        # Initalize the pocess metadata
+        fsamp_new = fsamp
+        ch_mask = np.ones(data.shape[0], dtype=bool)
+        sample_mask = np.ones(data.shape[1], dtype=bool)
+        ch_status = pd.DataFrame({
+            "name": [f"Ch{i:03d}" for i in range(1, data.shape[0] + 1)],
+            "status": ["on"] * data.shape[0],
+            "status_description": ["n/a"] * data.shape[0],
+        })
 
-        metadata = {}
-        metadata["fsamp_out"] = fsamp
-
-        # Mask bad channels
-        mask = np.zeros(data.shape[0], dtype=bool)
-
+        # Loop over all steps
         if self.steps is not None:
             for step in self.steps:
                 
                 if isinstance(step, self.Bandpass):
                     data = bandpass_signals(
                         data,
-                        metadata["fsamp_out"],
+                        fsamp_new,
                         high_pass=step.high_pass,
                         low_pass=step.low_pass,
                         method=step.method,
@@ -361,7 +427,7 @@ class pre_processing:
                 elif isinstance(step, self.Notch):
                     data = notch_signals(
                         data,
-                        metadata["fsamp_out"],
+                        fsamp_new,
                         freqs=step.freqs,
                         method=step.method,
                         order=step.order,
@@ -370,7 +436,7 @@ class pre_processing:
                 elif isinstance(step, self.Highpass):
                     data = highpass_signals(
                         data,
-                        metadata["fsamp_out"],
+                        fsamp_new,
                         high_pass=step.high_pass,
                         method=step.method,
                         order=step.order,
@@ -379,53 +445,62 @@ class pre_processing:
                 elif isinstance(step, self.Lowpass):
                     data = lowpass_signals(
                         data,
-                        metadata["fsamp_out"],
+                        fsamp_new,
                         low_pass=step.low_pass,
                         method=step.method,
                         order=step.order,
                         numtabs=step.numtabs,
                     )
                 elif isinstance(step, self.MaskChannels):
-                    local_mask = np.zeros(data.shape[0], dtype=bool)
-                    local_mask[step.channel_list] = True
-                    mask += local_mask
+                    local_mask = np.ones(data.shape[0], dtype=bool)
+                    local_mask[step.channel_list] = False
+                    ch_mask = ch_mask & local_mask
+                    ch_status.loc[np.invert(local_mask), "status"] = "off"
+                    ch_status.loc[
+                        np.invert(local_mask), "status_description"
+                    ] = step.model_dump().__str__()
                 elif isinstance(step, self.BadChannelDetection):
                     if step.window is not None:
-                        idx0 = int(step.window[0] / metadata["fsamp_out"])
-                        idx1 = int(step.window[1] / metadata["fsamp_out"])
+                        idx0 = int(step.window[0] / fsamp_new)
+                        idx1 = int(step.window[1] / fsamp_new)
                     else:
                         idx0 = 0
                         idx1 = data.shape[1]
                     scores = self._get_scores(data[:, idx0:idx1], step.metric)
-                    local_mask = self._get_bad_channels(
+                    bad_mask = self._get_bad_channels(
                         scores,
-                        mask,
+                        ~ch_mask,
                         method=step.method,
                         threshold_value=step.threshold_value,
                         max_iter=step.max_iter,
                         tail=step.tail
                     )
-                    mask += local_mask
+                    ch_mask = ch_mask & ~bad_mask
+                    ch_status.loc[bad_mask, "status"] = "off"
+                    ch_status.loc[
+                        bad_mask, "status_description"
+                    ] = step.model_dump().__str__()
                 elif isinstance(step, self.Downsample):
                     data = data[:, ::step.factor]
-                    metadata["fsamp_out"] = metadata["fsamp_out"] / step.factor
+                    sample_mask = sample_mask[::step.factor]
+                    fsamp_new = fsamp_new / step.factor
                 elif isinstance(step, self.TimeWindow):
-                    start_idx = step.t_start / metadata["fsamp_out"]
-                    if step.t_end == -1:
-                        end_idx = data.shape[1]
-                    else:
-                        end_idx = step.t_end / metadata["fsamp_out"]
-                    data = data[:, start_idx:end_idx]
+                    n_samples = data.shape[1]
+                    t = np.linspace(0, (n_samples-1) / fsamp_new, n_samples)
+                    sample_mask = np.where(t > step.t_start & t < step.t_end)
                 else:
                     raise ValueError(
                         "Invalid step type"
                     )
-        
-        selected_idx = np.where(mask == False)[0]    
-            
-        data = data[selected_idx, :]
-        metadata["mask"] = mask
+        # Package process metadata in a dictonary        
+        metadata = {}
+        metadata["ch_mask"] = ch_mask
+        metadata["sample_mask"] = sample_mask
+        metadata["ch_status"] = ch_status
+        metadata["fsamp"] = fsamp_new
 
- 
-        return data, metadata
+        # Package the applied processing steps
+        steps = [step.model_dump() for step in self.steps]
+
+        return data, metadata, steps
 
