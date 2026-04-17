@@ -126,20 +126,20 @@ class pre_processing:
     ---------
     Pre process HD-EMG data using a bandpass and a notch filter.
     >>> model = pre_processing(steps = [
-    >>>     {
-    >>>         "step": "bandpass",
-    >>>         "high_pass": 20,
-    >>>         "low_pass": 500,
-    >>>         "method": "butter",
-    >>>         "order": 2
-    >>>     },
-    >>>     {
-    >>>         "step": "notch",
-    >>>         "freqs": [50, 100, 150],
-    >>>         "method": "butter",
-    >>>         "order": 2
-    >>>     },
-    >>> ])
+    ...     {
+    ...         "step": "bandpass",
+    ...         "high_pass": 20,
+    ...         "low_pass": 500,
+    ...         "method": "butter",
+    ...         "order": 2
+    ...     },
+    ...     {
+    ...         "step": "notch",
+    ...         "freqs": [50, 100, 150],
+    ...         "method": "butter",
+    ...         "order": 2
+    ...     },
+    ... ])
     >>> preprocessed_data, metadata = model.pre_process(data=emg_data, fsamp=2048)                     
 
     """
@@ -455,9 +455,9 @@ class pre_processing:
                     local_mask = np.ones(data.shape[0], dtype=bool)
                     local_mask[step.channel_list] = False
                     ch_mask = ch_mask & local_mask
-                    ch_status.loc[np.invert(local_mask), "status"] = "off"
+                    ch_status.loc[~local_mask, "status"] = "off"
                     ch_status.loc[
-                        np.invert(local_mask), "status_description"
+                        ~local_mask, "status_description"
                     ] = step.model_dump().__str__()
                 elif isinstance(step, self.BadChannelDetection):
                     if step.window is not None:
