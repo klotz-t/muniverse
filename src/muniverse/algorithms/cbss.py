@@ -43,9 +43,10 @@ class CBSS:
         whitening_regularization : {"auto", float, None}, default "auto" 
             Adds a small value to the eigenvalues for regularization. 
             If "auto", the mean of the second half of the eigenvalues is used.
-        spike_cluster_method : {"kmeans"}, default "kmeans" 
-            Method used to seperate motor unit spikes and background spikes 
-            (currently only "kmeans" is implemented).    
+        spike_cluster_method : {"kmeans", "gmm"}, default "kmeans" 
+            Method used to seperate motor unit spikes and background spikes. 
+            If "kmeans" the K-Means++ algorithm is applied (default), 
+            if "gmm" a Gaussian mixture model is fitted and used for clustering.    
         ica_iterations : int , default 100
             Number of fastICA runs, i.e., maximum number of extracted sources.
         ica_initalization : {"random", "activity_idx"}, default "random" 
@@ -55,6 +56,8 @@ class CBSS:
         ica_opt_fun_exp : float , default 3
             Exponent a of the loss function g(x)=x * (x^2 + epsilon)^((a-1)/2) 
             representing a smooth approximation of g(x) = sign(x) * abs(x)**a. 
+        ica_opt_fun_eps : float , default 1e-3
+            Epsilon used in the loss function.    
         ica_max_iter : int , default 100
             Maximum number of iterations for the fastICA fixed-point algorithm.  
         ica_tol : float , default 1e-4 
@@ -90,7 +93,26 @@ class CBSS:
             Classify sources into good (scores below cov_th) or bad based 
             on the coefficient of variation of the interspike intevalls.    
         verbose : float , default True
-            If True, print progress.                
+            If True, print progress. 
+
+    Attributes
+    ----------
+        unmixing_weights_ : np.ndarray (n_features, n_components)
+            The learned unmixing weights
+        whitening_matrix_ : np.ndarray (n_features, n_features)
+            Whitening matrix    
+        n_fixed_point_iter_ : np.ndarray of int
+            Number of iterations in the fixed point algorithm  
+        fixed_point_deltas_ : np.ndarray
+            Cosine distance between two fixed point updates
+        n_refinement_iter_ : np.ndarray of int
+            Number of iterations in the fixed point algorithm  
+        refinement_scores_ : np.ndarray
+            Score at each refinement iteration
+        peel_off_ : np.ndarray of bool
+            Whether a source was peeled off or not     
+
+
 
     Example
     -------
@@ -107,10 +129,13 @@ class CBSS:
             ext_fact: int = 12,
             whitening_method: Literal["ZCA", "PCA", "Cholesky"] = "ZCA",
             whitening_reg: str | float | None = "auto",
+            spike_detection_exp: float = 2,
+            spike_detection_min_delay: float = 0.01,
             spike_cluster_method: Literal["kmeans"] = "kmeans",
             ica_iterations: int = 100,
             ica_initalization: Literal["random", "activity_idx"] = "random",
             ica_opt_fun_exp: float = 3,
+            ica_opt_fun_eps: float = 1e-3,
             ica_max_iter: int = 100,
             ica_tol: float = 1e-4,
             ica_orthogonalization: Literal["gram-schmidt", "projection_deflation", None] = "gram-schmidt",
@@ -142,10 +167,13 @@ class CBSS:
         self.ext_fact = ext_fact
         self.whitening_method = whitening_method
         self.whitening_reg = whitening_reg
+        self.spike_detection_exp = spike_detection_exp
+        self.spike_detection_min_delay = spike_detection_min_delay
         self.spike_cluster_method = spike_cluster_method
         self.ica_iterations = ica_iterations
         self.ica_initalization = ica_initalization
         self.ica_opt_fun_exp = ica_opt_fun_exp
+        self.ica_opt_fun_eps = ica_opt_fun_eps
         self.ica_max_iter = ica_max_iter
         self.ica_tol  = ica_tol
         self.ica_orthogonalization = ica_orthogonalization
@@ -245,17 +273,13 @@ class CBSS:
 
         # Extend signals and subtract the mean and cut the edges
         print("Extension:")
-        ext_sig = extension(sig, self.ext_fact)
-        ext_sig -= np.mean(ext_sig, axis=1, keepdims=True)
-
-        # Remove the edges from the exteneded signal
-        ext_sig[:, : self.ext_fact * 2] = 0
-        ext_sig[:, -self.ext_fact * 2 :] = 0
+        # Extend signals and subtract the mean and cut the edges
+        ext_sig = self._extend(sig)
         print("  - Finished")
 
         # Whiten the extended signals
         print("Whitening:")
-        white_sig, Z = whitening(
+        white_sig, self.whitening_matrix_ = whitening(
             Y=ext_sig, 
             method=self.whitening_method
         )
@@ -268,15 +292,21 @@ class CBSS:
             "sil": np.zeros(self.ica_iterations),
             "cov_isi": np.zeros(self.ica_iterations),
         }
+        self.n_fixed_point_iter_ = np.zeros(self.ica_iterations, dtype=int)
+        self.fixed_point_deltas_ = {i: [] for i in range(self.ica_iterations)}
+        self.n_refinement_iter_ = np.zeros(self.ica_iterations, dtype=int)
+        self.refinement_scores_ = {i: [] for i in range(self.ica_iterations)}
+        self.peel_off_ = np.zeros(self.ica_iterations, dtype=bool)
         #sil = np.zeros(self.ica_iterations)
         #cov_isi = np.zeros(self.ica_iterations)
-        unmixing_weights = np.zeros((white_sig.shape[0], self.ica_iterations))
+        self.unmixing_weights_ = np.zeros((white_sig.shape[0], self.ica_iterations))
 
         if self.ica_initalization == "activity_idx":
             act_idx_histoty = np.array([])
 
         # Loop over each MU
         for i in range(self.ica_iterations):
+            print(f'Iteration {i}:')
             # Initalize
             if self.ica_initalization == "random":
                 w = np.random.randn(white_sig.shape[0])
@@ -290,36 +320,43 @@ class CBSS:
                 ValueError("The specified initalization method is not implemented")
 
             # fastICA fixedpoint optimization
-            w, k1 = self._fixed_point_alg(w, white_sig, unmixing_weights)            
+            w = self._fixed_point_alg(w, white_sig, i)         
 
             # Predict source and estimate the source quality
             sources[i, :] = w.T @ white_sig
             spikes[i], scores["sil"][i] = est_spike_times(
-                sources[i, :], fsamp, cluster=self.spike_cluster_method
+                sig = sources[i, :], 
+                fsamp = fsamp, 
+                cluster = self.spike_cluster_method, 
+                a = self.spike_detection_exp,
+                min_delay = self.spike_detection_min_delay
             )
             scores["cov_isi"][i] = self._calc_cov_isi(spikes[i], fsamp)
-            print(f'Iteration {i}:')
-            print(f'  - Number of fixed point iterations: {k1}')
+            #print(f'  - Number of fixed point iterations: {k1}')
             print(f'  - SIL: {scores["sil"][i]}')
             print(f'  - cov_isi: {scores["cov_isi"][i]}')
 
             # Self supervised refinement loop
             if len(spikes[i]) > self.refinement_min_spikes and self.refinement_loop:
                 scores_i = {k: v[i] for k, v in scores.items()}
-                w, k2 = self._self_supervised_refinement(
-                    w, white_sig, scores_i, fsamp
+                w = self._self_supervised_refinement(
+                    w, white_sig, scores_i, fsamp, i
                 )
                 sources[i, :] = w.T @ white_sig
                 spikes[i], scores["sil"][i] = est_spike_times(
-                    sources[i, :], fsamp, cluster=self.spike_cluster_method
+                    sig = sources[i, :], 
+                    fsamp = fsamp, 
+                    cluster = self.spike_cluster_method, 
+                    a = self.spike_detection_exp,
+                    min_delay = self.spike_detection_min_delay
                 )
                 scores["cov_isi"][i] = self._calc_cov_isi(spikes[i], fsamp)
-                print(f'    - Number of refinement iterations: {k2}')
+                #print(f'    - Number of refinement iterations: {k2}')
                 print(f'    - SIL: {scores["sil"][i]}')
                 print(f'    - cov_isi: {scores["cov_isi"][i]}')
 
             # Save the optimized unmixing weights
-            unmixing_weights[:, i] = w
+            self.unmixing_weights_[:, i] = w
 
             # Peel-off the detected source
             if (
@@ -330,14 +367,15 @@ class CBSS:
                 white_sig, _, _ = peel_off(
                     white_sig, spikes[i], win=self.peel_off_window, fsamp=fsamp
                 )
+                self.peel_off_[i] = True
                 print('    Peel off: True')
 
         # Remove duplicates
-        sources, spikes, scores["sil"], unmixing_weights = remove_duplicates(
+        sources, spikes, scores["sil"], self.unmixing_weights_ = remove_duplicates(
             sources,
             spikes,
             scores["sil"],
-            unmixing_weights,
+            self.unmixing_weights_,
             fsamp,
             max_shift=self.match_max_shift,
             tol=self.match_tol,
@@ -345,25 +383,21 @@ class CBSS:
         )
 
         # Remove bad sources
-        sources, spikes, scores["sil"], unmixing_weights = remove_bad_sources(
+        sources, spikes, scores["sil"], self.unmixing_weights_ = remove_bad_sources(
             sources,
             spikes,
             scores["sil"],
-            unmixing_weights,
+            self.unmixing_weights_,
             threshold=self.sil_th,
             min_num_spikes=self.min_num_spikes,
         )
 
-        if self.unmixing_format == "ext":
-            unmixing_weights = np.linalg.pinv(Z) @ unmixing_weights
-
-        return sources, spikes, scores["sil"], unmixing_weights
+        return sources, spikes, scores["sil"], self.unmixing_weights_
 
     def predict(
             self, 
             sig: np.ndarray, # (n_channels x n_samples)
-            fsamp: float, 
-            unmixing_weights: np.ndarray # (n_features x n_sources)
+            fsamp: float
     ):
         """
         Predict motor unit spike trains given multi-channel 
@@ -374,9 +408,7 @@ class CBSS:
             sig : np.ndarray 
                 Input (EMG) signal (n_channels x n_samples)
             fsamp : float 
-                Sampling frequency in Hz
-            unmixing_weights : np.ndarray 
-                Learned weights of the unmixing matrix    
+                Sampling frequency in Hz  
 
         Returns
         -------
@@ -390,46 +422,45 @@ class CBSS:
         """
 
         # Extend signals and subtract the mean and cut the edges
-        print("Extension:")
-        ext_sig = extension(sig, self.ext_fact)
-        ext_sig -= np.mean(ext_sig, axis=1, keepdims=True)
-        # Remove the edges from the exteneded signal
-        ext_sig[:, : self.ext_fact * 2] = 0
-        ext_sig[:, -self.ext_fact * 2 :] = 0
+        ext_sig = self._extend(sig)
 
-        if self.unmixing_format == "white":
-            # Whiten the extended signals
-            print("Whitening:")
-            white_sig, Z = whitening(
-                Y=ext_sig, 
-                method=self.whitening_method
-            )
+        # Whiten data
+        white_sig = self.whitening_matrix_ @ ext_sig
 
-            sources = unmixing_weights.T @ white_sig
+        # Apply unmixing weidths
+        sources = self.unmixing_weights_.T @ white_sig
 
-        elif self.unmixing_format == "ext":
-            covariance = ext_sig @ ext_sig.T / (ext_sig.shape[1] - 1)
-            sources = unmixing_weights.T @ np.linalg.pinv(covariance) @ ext_sig  
-        else:
-            raise ValueError(
-                f"Your unmixing_format is {self.unmixing_format}"
-                "Must be one of 'white' or 'ext'"
-            )
-
-        spikes = {}
+        # Init spikes and scores
+        spikes = {i: [] for i in range(sources.shape[0])}
         scores = {
             "sil": np.zeros(sources.shape[0]),
             "cov_isi": np.zeros(sources.shape[0]),
         }
+
+        # Get spikes and scores
         for i in range(sources.shape[0]):
             spikes[i], scores["sil"][i] = est_spike_times(
-                    sources[i, :], fsamp, cluster=self.spike_cluster_method
-                )
+                sig = sources[i, :], 
+                fsamp = fsamp, 
+                cluster = self.spike_cluster_method, 
+                a = self.spike_detection_exp,
+                min_delay = self.spike_detection_min_delay
+            )
             scores["cov_isi"][i] = self._calc_cov_isi(spikes[i], fsamp)
 
         return sources, spikes, scores["sil"]
+    
+    def _extend(self, sig):
+        """Extend the data, subtract the mean and cut the edges"""
 
-    def _fixed_point_alg(self, w, X, B, epsilon=1e-3):
+        ext_sig = extension(sig, self.ext_fact)
+        ext_sig -= np.mean(ext_sig, axis=1, keepdims=True)
+        ext_sig[:, : self.ext_fact * 2] = 0
+        ext_sig[:, -self.ext_fact * 2 :] = 0
+
+        return ext_sig
+
+    def _fixed_point_alg(self, w, X, i):
         """
         Fixed-point algorithm to maximize sparseness of a source signal.
         The optimization function is 
@@ -444,19 +475,17 @@ class CBSS:
                 Initial unmixing weight vector (n_channels,)
             X : np.ndarray 
                 Whitened signal (n_channels x n_samples)
-            B : np.ndarray 
-                Current unmixing matrix (n_components x n_channels)
+            i : int
+                The current iteration     
 
         Returns
         -------
             w : np.ndarray 
                 Optimized unmixing weight vector
-            k : int 
-                Number of iterations taken
         """
 
         if self.ica_orthogonalization == "projection_deflation":
-            P = B @ B.T
+            P = self.unmixing_weights_ @ self.unmixing_weights_.T
 
         delta = np.ones(self.ica_max_iter)
         k = 0
@@ -467,15 +496,15 @@ class CBSS:
             wTX = w.T @ X  # shape: (n_samples,)
             # First derivative G'(x)
             g = (
-                (epsilon + wTX**2) ** ((self.ica_opt_fun_exp - 3) / 2) 
-                * (self.ica_opt_fun_exp * wTX**2 + epsilon)
+                (self.ica_opt_fun_eps + wTX**2) ** ((self.ica_opt_fun_exp - 3) / 2) 
+                * (self.ica_opt_fun_exp * wTX**2 + self.ica_opt_fun_eps)
             )
             # Second derivative G''(x)
             gp = (
                 (self.ica_opt_fun_exp - 1)
                 * wTX
-                * (epsilon + wTX**2) ** ((self.ica_opt_fun_exp - 5) / 2)
-                * (self.ica_opt_fun_exp * wTX**2 + 3 * epsilon)
+                * (self.ica_opt_fun_eps + wTX**2) ** ((self.ica_opt_fun_exp - 5) / 2)
+                * (self.ica_opt_fun_exp * wTX**2 + 3 * self.ica_opt_fun_eps)
             )
             A = np.mean(gp)
             w = np.mean(X * g, axis=1) - A * w  # shape: (n_channels,)
@@ -484,7 +513,7 @@ class CBSS:
             if self.ica_orthogonalization == "projection_deflation":
                 w = w - P @ w
             elif self.ica_orthogonalization == "gram-schmidt":
-                w = gram_schmidt(w, B)
+                w = gram_schmidt(w, self.unmixing_weights_)
             else:
                 pass
 
@@ -495,9 +524,15 @@ class CBSS:
             delta[k + 1] = abs(np.dot(w, w_last) - 1)
             k += 1
 
-        return w, k
+        self.n_fixed_point_iter_[i] = k 
+        self.fixed_point_deltas_[i] = delta[:k]
 
-    def _self_supervised_refinement(self, w, X, scores_i, fsamp):
+        if self.verbose:
+            print(f'  - Number of fixed point iterations: {k}')
+
+        return w
+
+    def _self_supervised_refinement(self, w, X, scores_i, fsamp, i):
         """
         Iterativly update a motor unit filter given a set of motor neuron
         spike times as long as the coefficient of variance of the interspike
@@ -522,27 +557,43 @@ class CBSS:
         """
 
         # Init the optimization
-        score = self._get_refinement_loss(scores_i)
-        score_last = score + 1
+        scores = np.zeros(self.refinement_max_iter)
+        score_last = np.inf
         k = 0
 
-        while score < score_last and k < self.refinement_max_iter:
+        while k < self.refinement_max_iter:
             source = w.T @ X
             spikes, sil = est_spike_times(
-                source, fsamp, cluster=self.spike_cluster_method
+                sig = source, 
+                fsamp = fsamp, 
+                cluster = self.spike_cluster_method, 
+                a = self.spike_detection_exp,
+                min_delay = self.spike_detection_min_delay
             )
-            score_last = score
+
             cov_isi = self._calc_cov_isi(spikes, fsamp)
             scores_i = {
                 "sil": sil, 
                 "cov_isi": cov_isi
             }
-            score = self._get_refinement_loss(scores_i)
+            scores[k] = self._get_refinement_loss(scores_i)
+
+            if score_last - scores[k] <= 1e-4:
+                break
+
+            score_last = scores[k]
+
             w = np.mean(X[:, spikes], axis=1)
             w = w / np.linalg.norm(w)
             k += 1
 
-        return w, k
+        self.n_refinement_iter_[i] = k 
+        self.refinement_scores_[i] = scores[:k]
+
+        if self.verbose:
+            print(f'    - Number of refinement iterations: {k}')
+
+        return w
     
     def _calc_cov_isi(self, spikes, fsamp):
         """ Get the coefficent of varation of the interspike intervalls """
