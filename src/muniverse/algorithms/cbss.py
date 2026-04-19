@@ -12,7 +12,143 @@ from .core import (
     peel_off
 )
 
-class CBSS:
+class _BaseCBSS():
+    """Base class for CBSS-based motor unit idendification"""
+
+    def __init__(
+            self,
+            ext_fact: int = 12,
+            whitening_method: Literal["ZCA", "PCA", "Cholesky"] = "ZCA",
+            whitening_reg: str | float | None = "auto",
+            spike_detection_exp: float = 2,
+            spike_detection_min_delay: float = 0.01,
+            verbose: bool = False
+    ):
+        # Default parameters
+        self.ext_fact = ext_fact
+        self.whitening_method = whitening_method
+        self.whitening_reg = whitening_reg
+        self.spike_detection_exp = spike_detection_exp
+        self.spike_detection_min_delay = spike_detection_min_delay
+        self.verbose = verbose
+
+    def set_param(self, **kwargs):
+        """
+        Update parameters given an arbitary list of key value pairs
+
+        Args
+        ----
+            **kwargs
+                Parsed parameteters
+        
+        """
+        for key, value in kwargs.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+            else:
+                raise AttributeError(f"Invalid parameter: {key}")        
+
+
+    def _extension(self, sig: np.ndarray):
+        """Extend the data, subtract the mean and cut the edges"""
+
+        if self.verbose:
+            print("Step: Extension")
+            print(f"  - Extension factor: {self.ext_fact}")
+
+        ext_sig = extension(sig, self.ext_fact)
+        ext_sig -= np.mean(ext_sig, axis=1, keepdims=True)
+        ext_sig[:, : self.ext_fact * 2] = 0
+        ext_sig[:, -self.ext_fact * 2 :] = 0
+
+        return ext_sig
+
+    def _whitening(self, ext_sig: np.ndarray):
+
+        if self.verbose:
+            print("Step: Whitening")
+            print(f"  - Method: {self.whitening_method}")        
+
+        white_sig, self.whiten_, self.unwhiten_ = whitening(
+            Y = ext_sig, 
+            method = self.whitening_method,
+            regularization = self.whitening_reg 
+        )
+
+        return white_sig
+    
+    def _calc_cov_isi(self, spikes, fsamp):
+        """ Get the coefficent of varation of the interspike intervalls """
+
+        if len(spikes) > 2:
+            isi = np.diff(spikes / fsamp)
+            cov_isi = np.std(isi) / np.mean(isi)
+        else:
+            cov_isi = np.inf
+
+        return cov_isi
+    
+    def predict(
+            self, 
+            sig: np.ndarray, # (n_channels x n_samples)
+            fsamp: float
+    ):
+        """
+        Predict motor unit spike trains given multi-channel 
+        EMG data using your learned unmixing weights.
+
+        Args
+        ----
+            sig : np.ndarray 
+                Input (EMG) signal (n_channels x n_samples)
+            fsamp : float 
+                Sampling frequency in Hz  
+
+        Returns
+        -------
+            sources : np.ndarray 
+                Estimated sources / ica components (n_components x n_samples)
+            spikes : dict 
+                Sample indices of motor neuron discharges
+            sil : np.ndarray 
+                Pseudo-silhouette scores of the estimated sources
+        
+        """
+
+        if not hasattr(self, "unmixing_weights_"):
+            raise ValueError(
+                "No unmixing weights are defined"
+            )
+
+        # Extend signals and subtract the mean and cut the edges
+        ext_sig = self._extension(sig)
+
+        # Whiten data
+        white_sig = self.whiten_ @ ext_sig
+
+        # Apply unmixing weidths
+        sources = self.unmixing_weights_.T @ white_sig
+
+        # Init spikes and scores
+        spikes = {i: [] for i in range(sources.shape[0])}
+        scores = {
+            "sil": np.zeros(sources.shape[0]),
+            "cov_isi": np.zeros(sources.shape[0]),
+        }
+
+        # Get spikes and scores
+        for i in range(sources.shape[0]):
+            spikes[i], scores["sil"][i] = est_spike_times(
+                source = sources[i, :], 
+                fsamp = fsamp, 
+                a = self.spike_detection_exp,
+                min_delay = self.spike_detection_min_delay
+            )
+            scores["cov_isi"][i] = self._calc_cov_isi(spikes[i], fsamp)
+
+        return sources, spikes, scores 
+
+class CBSS(_BaseCBSS):
     """
     Class implementing convolutive blind source separation (CBSS) 
     to identify the spiking activity of motor neurons given
@@ -158,6 +294,15 @@ class CBSS:
             config: dict | None = None, 
         ):
 
+        super().__init__(
+            ext_fact = ext_fact,
+            whitening_method = whitening_method,
+            whitening_reg = whitening_reg,
+            spike_detection_exp = spike_detection_exp,
+            spike_detection_min_delay = spike_detection_min_delay,
+            verbose = verbose
+        )
+
         # Default parameters
         self.bandpass = [20, 500]
         self.bandpass_order = 2
@@ -167,11 +312,11 @@ class CBSS:
         self.notch_width = 1
 
         self.random_seed = random_seed
-        self.ext_fact = ext_fact
-        self.whitening_method = whitening_method
-        self.whitening_reg = whitening_reg
-        self.spike_detection_exp = spike_detection_exp
-        self.spike_detection_min_delay = spike_detection_min_delay
+        # self.ext_fact = ext_fact
+        # self.whitening_method = whitening_method
+        # self.whitening_reg = whitening_reg
+        # self.spike_detection_exp = spike_detection_exp
+        # self.spike_detection_min_delay = spike_detection_min_delay
         #self.spike_cluster_method = spike_cluster_method
         self.ica_iterations = ica_iterations
         self.ica_initalization = ica_initalization
@@ -189,7 +334,7 @@ class CBSS:
         self.sil_th = sil_th
         self.cov_th = cov_th
         self.unmixing_format = unmixing_format
-        self.verbose = verbose
+        #self.verbose = verbose
 
         self.min_num_spikes = 10
         self.match_th = match_th
@@ -208,23 +353,7 @@ class CBSS:
             else:
                 print(f"Warning: ignoring invalid parameter: {key}")
 
-    def set_param(self, **kwargs):
-        """
-        Update CBSS parameters given an arbitary list of key value pairs
-
-        Args
-        ----
-            **kwargs
-                Parsed parameteters
-        
-        """
-        for key, value in kwargs.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
-            else:
-                raise AttributeError(f"Invalid parameter: {key}")
-
-    def decompose(self, 
+    def fit_predict(self, 
                   sig: np.ndarray, # (n_channels x n_samples)
                   fsamp: float
     ):
@@ -274,19 +403,16 @@ class CBSS:
                 #n_harmonics=self.notch_n_harmonics,
             )
 
+
         # Extend signals and subtract the mean and cut the edges
-        print("Extension:")
-        # Extend signals and subtract the mean and cut the edges
-        ext_sig = self._extend(sig)
-        print("  - Finished")
+        ext_sig = self._extension(sig)
 
         # Whiten the extended signals
-        print("Whitening:")
-        white_sig, self.whiten_, self.unwhiten_ = whitening(
-            Y=ext_sig, 
-            method=self.whitening_method
-        )
-        print("  - Finished")
+        # white_sig, self.whiten_, self.unwhiten_ = whitening(
+        #     Y=ext_sig, 
+        #     method=self.whitening_method
+        # )
+        white_sig = self._whitening(ext_sig)
 
         # Initalize the output variables
         sources = np.zeros((self.ica_iterations, sig.shape[1]))
@@ -394,77 +520,12 @@ class CBSS:
         )
 
         return sources, spikes, scores["sil"], self.unmixing_weights_
-
-    def predict(
-            self, 
-            sig: np.ndarray, # (n_channels x n_samples)
-            fsamp: float
-    ):
-        """
-        Predict motor unit spike trains given multi-channel 
-        EMG data using your learned unmixing weights.
-
-        Args
-        ----
-            sig : np.ndarray 
-                Input (EMG) signal (n_channels x n_samples)
-            fsamp : float 
-                Sampling frequency in Hz  
-
-        Returns
-        -------
-            sources : np.ndarray 
-                Estimated sources / ica components (n_components x n_samples)
-            spikes : dict 
-                Sample indices of motor neuron discharges
-            sil : np.ndarray 
-                Pseudo-silhouette scores of the estimated sources
-        
-        """
-
-        # Extend signals and subtract the mean and cut the edges
-        ext_sig = self._extend(sig)
-
-        # Whiten data
-        white_sig = self.whiten_ @ ext_sig
-
-        # Apply unmixing weidths
-        sources = self.unmixing_weights_.T @ white_sig
-
-        # Init spikes and scores
-        spikes = {i: [] for i in range(sources.shape[0])}
-        scores = {
-            "sil": np.zeros(sources.shape[0]),
-            "cov_isi": np.zeros(sources.shape[0]),
-        }
-
-        # Get spikes and scores
-        for i in range(sources.shape[0]):
-            spikes[i], scores["sil"][i] = est_spike_times(
-                source = sources[i, :], 
-                fsamp = fsamp, 
-                a = self.spike_detection_exp,
-                min_delay = self.spike_detection_min_delay
-            )
-            scores["cov_isi"][i] = self._calc_cov_isi(spikes[i], fsamp)
-
-        return sources, spikes, scores["sil"]
     
     def transform_weights(self):
         """Transform the unmixing weights in the extended space"""
 
         return self.unwhiten_ @ self.unmixing_weights_
             
-    def _extend(self, sig):
-        """Extend the data, subtract the mean and cut the edges"""
-
-        ext_sig = extension(sig, self.ext_fact)
-        ext_sig -= np.mean(ext_sig, axis=1, keepdims=True)
-        ext_sig[:, : self.ext_fact * 2] = 0
-        ext_sig[:, -self.ext_fact * 2 :] = 0
-
-        return ext_sig
-
     def _fixed_point_alg(self, w, X, i):
         """
         Fixed-point algorithm to maximize sparseness of a source signal.
@@ -598,18 +659,7 @@ class CBSS:
             print(f'    - Number of refinement iterations: {k}')
 
         return w
-    
-    def _calc_cov_isi(self, spikes, fsamp):
-        """ Get the coefficent of varation of the interspike intervalls """
-
-        if len(spikes) > 2:
-            isi = np.diff(spikes / fsamp)
-            cov_isi = np.std(isi) / np.mean(isi)
-        else:
-            cov_isi = np.inf
-
-        return cov_isi
-    
+        
     def _get_refinement_loss(self, scores_i):
         """ Compute the loss in the refinement loop """
 
@@ -619,3 +669,4 @@ class CBSS:
             score = 1 - scores_i["sil"]
 
         return score
+       
