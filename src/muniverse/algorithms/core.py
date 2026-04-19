@@ -6,6 +6,7 @@ from scipy.linalg import toeplitz
 from scipy.signal import butter, filtfilt, find_peaks, firwin2, iirnotch
 from scipy.stats import zscore
 from sklearn.cluster import KMeans
+from sklearn.mixture import GaussianMixture
 
 from ..evaluation.evaluate import *
 
@@ -469,6 +470,8 @@ def whitening(
             Whitened signal (n_channels x n_samples)
         Z : np.ndarray 
             Whitening matrix (n_channels x n_channels)
+        Z_inv : np.ndarray 
+            Inverse of the whitening matrix (n_channels x n_channels)    
 
     """
     n_channels, n_samples = Y.shape
@@ -478,8 +481,9 @@ def whitening(
         covariance = Y @ Y.T / (n_samples - 1)
         R = np.linalg.cholesky(covariance)
         Z = np.linalg.inv(R.T)
+        Z_inv = R.T
         wY = Z @ Y
-        return wY, Z
+        return wY, Z, Z_inv
 
     # Use SVD
     if use_svd:
@@ -492,12 +496,15 @@ def whitening(
             reg = regularization
         else:
             reg = 0
-        S_inv = 1.0 / np.sqrt(S + reg + eps)
+        S_reg = np.sqrt(S + reg + eps)   
+        S_inv = 1.0 / S_reg
 
         if method == "ZCA":
             Z = U @ np.diag(S_inv) @ U.T
+            Z_inv = U @ np.diag(S_reg) @ U.T
         elif method == "PCA":
             Z = np.diag(S_inv) @ U.T
+            Z_inv = np.diag(S_reg) @ U.T
         else:
             raise ValueError("Unknown method.")
         wY = Z @ Y
@@ -513,23 +520,25 @@ def whitening(
             reg = regularization
         else:
             reg = 0
-        S_inv = 1.0 / np.sqrt(S + reg + eps)
+        S_reg = np.sqrt(S + reg + eps)    
+        S_inv = 1.0 / S_reg
 
         if method == "ZCA":
             Z = V @ np.diag(S_inv) @ V.T
+            Z_inv = V @ np.diag(S_reg) @ V.T
         elif method == "PCA":
             Z = np.diag(S_inv) @ V.T
+            Z_inv = np.diag(S_reg) @ V.T
         else:
             raise ValueError("Unknown method.")
         wY = Z @ Y
 
-    return wY, Z
+    return wY, Z, Z_inv
 
 
 def est_spike_times(
-        sig: np.ndarray, # (n_samples, ) 
+        source: np.ndarray, # (n_samples, ) 
         fsamp: float, 
-        cluster: Literal["kmeans"] = "kmeans", 
         a: float = 2, 
         min_delay: float = 0.01
 ) -> tuple[np.ndarray, float]:
@@ -538,18 +547,19 @@ def est_spike_times(
     a silhouette-like metric for source quality quantification.
     To do so, (i) a asymetric power law is applied to the signal,
     (ii) a peak detection method identifies spike candidates that
-    are (iii) clustered into true and false spikes.
+    are (iii) sorted with kmeans++ to estimate true and false spikes.
 
     Args
     ----
-        sig : np.ndarray (n_samples, )
+        source : np.ndarray (n_samples, )
             Spike-like input signal (predicted sources)
         fsamp : float 
             Sampling rate in Hz
-        cluster : {"kmeans"}, default "kmeans"
-            Clustering method used to identify the spike indices
+        cluster : {"kmeans", "gmm"}, default "kmeans"
+            Clustering method used to identify the spike indices. Can be either
+            "kmeans" or "gmm" (fitting a Gaussian mixture model).
         a : float , default 2
-            Exponent of assymetric power law
+            Exponent of assymetric power law used for contrast enhancement
         min_delay : float , default 0.01 
             Mimium distance between two spikes (used for peak detection)   
 
@@ -560,44 +570,41 @@ def est_spike_times(
         sil : float 
             Silhouette-like score (0 = poor, 1 = strong separation)
     """
-    sig = np.asarray(sig)
 
     # Assymetric power law that can be useful for contrast enhancement
-    sig = np.sign(sig) * sig**a
+    sig = np.sign(source) * source**a
 
-    if cluster == "kmeans":
+    # Apply a peak detection method
+    min_peak_dist = int(round(fsamp * min_delay))
+    peaks, _ = find_peaks(sig, distance=min_peak_dist)
 
-        # Detect peaks with minimum distance of 10 ms
-        min_peak_dist = int(round(fsamp * min_delay))
-        peaks, _ = find_peaks(sig, distance=min_peak_dist)
+    if len(peaks) == 0:
+        return np.array([])
 
-        if len(peaks) == 0:
-            return np.array([])
+    # Get peak values
+    peak_vals = sig[peaks].reshape(-1, 1)
 
-        # Get peak values
-        peak_vals = sig[peaks].reshape(-1, 1)
+    # K-means clustering to separate signal vs. noise
+    kmeans = KMeans(n_clusters=2, n_init=10, random_state=42)
+    labels = kmeans.fit_predict(peak_vals)
+    centroids = kmeans.cluster_centers_.flatten()
 
-        # K-means clustering to separate signal vs. noise
-        kmeans = KMeans(n_clusters=2, n_init=10, random_state=42)
-        labels = kmeans.fit_predict(peak_vals)
-        centroids = kmeans.cluster_centers_.flatten()
+    # Spikes are those in the cluster with the higher mean
+    spike_cluster = np.argmax(centroids)
+    est_spikes = peaks[labels == spike_cluster]
 
-        # Spikes are those in the cluster with the higher mean
-        spike_cluster = np.argmax(centroids)
-        est_spikes = peaks[labels == spike_cluster]
+    # Compute within- and between-cluster distances
+    D = kmeans.transform(peak_vals)  # Distances to both centroids
+    sumd = np.sum(
+        D[labels == spike_cluster, spike_cluster] ** 2
+    )  # Exponent 2 for obtaining the squared Euclidian distance
+    between = np.sum(
+        D[labels == spike_cluster, 1 - spike_cluster] ** 2
+    )  # Exponent 2 for obtaining the squared Euclidian distance
 
-        # Compute within- and between-cluster distances
-        D = kmeans.transform(peak_vals)  # Distances to both centroids
-        sumd = np.sum(
-            D[labels == spike_cluster, spike_cluster] ** 2
-        )  # Exponent 2 for obtaining the squared Euclidian distance
-        between = np.sum(
-            D[labels == spike_cluster, 1 - spike_cluster] ** 2
-        )  # Exponent 2 for obtaining the squared Euclidian distance
-
-        # Silhouette-inspired score
-        denom = max(sumd, between)
-        sil = (between - sumd) / denom if denom > 0 else 0.0
+    # Silhouette-inspired score
+    denom = max(sumd, between)
+    sil = (between - sumd) / denom if denom > 0 else 0.0   
 
     return est_spikes, sil
 
