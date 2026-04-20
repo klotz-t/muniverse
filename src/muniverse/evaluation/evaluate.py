@@ -231,9 +231,9 @@ def max_xcorr(
 
 def label_sources(
         df: pd.DataFrame, 
-        fsamp: float = 10000, 
+        fsamp: float, 
         t_start: float = 0, 
-        t_end: float = 60, 
+        t_end: float = -1, 
         threshold: float = 0.3, 
         max_shift: float = 0.1, 
         tol: float = 0.001
@@ -267,6 +267,9 @@ def label_sources(
             matching scores between all pairs of sources
 
     """
+
+    if t_end == -1:
+        t_end = df["onset"].max() + 0.1
 
     units = sorted(df["unit_id"].unique())
     n_source = len(units)
