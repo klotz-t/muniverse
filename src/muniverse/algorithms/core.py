@@ -6,8 +6,7 @@ from scipy.linalg import toeplitz
 from scipy.signal import butter, filtfilt, find_peaks, firwin2, iirnotch
 from scipy.stats import zscore
 from sklearn.cluster import KMeans
-from sklearn.mixture import GaussianMixture
-
+#from sklearn.mixture import GaussianMixture
 from ..evaluation.evaluate import *
 
 
@@ -908,4 +907,131 @@ def spike_dict_to_long_df(
 
     return df
 
+
+def get_duplicates_mask(
+        spikes: pd.DataFrame,
+        scores: np.ndarray, 
+        fsamp: float, 
+        mode: Literal["max", "min"] = "max",
+        t_start: float = 0, 
+        t_end: float = -1,
+        duplicate_theshold: float = 0.3,
+        max_shift: float = 0.01,
+        tol: float = 0.001,
+        mask: np.ndarray | None = None
+) -> np.ndarray:
+    """
+    Idendify duplicates spike trains and only keep for each 
+    unique unit label the source with the best quality score
+
+    Args
+    ----
+        spikes : pd.DataFrame
+            Long-table dictonary of spikes
+        scores : np.ndarray 
+            Array of quality metrics
+        fsamp : float 
+            Sampling rate in Hz
+        mode : {"max", "min"} , default "max"         
+            Weather to keep the source with the maximal
+            or minimal score
+        duplicate_theshold : float , default 0.3
+            Minimum fraction of common spikes to classify 
+            two units identical       
+        max_shift : float , default 0.01
+            Maximal delay between two spike trains in seconds
+        tol : float , default 0.001
+            All spikes with a delay lower than the given tolerance 
+            (in seconds) are classified identical
+
+
+    Returns
+    -------
+        keep_mask : np.ndarray (n_units,)
+            Boolean mask of selected sources
+            (True: keep source, False: reject source)
+
+
+    """
+
+    if mask is not None:
+        idx = np.where(~mask)
+        scores[idx] = -1
+
+    units = sorted(spikes["unit_id"].unique())
+    n_source = len(units)
+    keep_mask = np.zeros(n_source, dtype=bool)
+
+    new_labels, _ = label_sources(
+        spikes, fsamp=fsamp, t_start=t_start, t_end=t_end, 
+        threshold=duplicate_theshold, max_shift=max_shift, tol=tol
+    )
+
+    unique_labels = np.unique(new_labels)
+
+    for label in unique_labels:
+        idx = np.where(new_labels == label)[0]
+
+        # pick best according to score
+        if mode == "max":
+            best_idx = idx[np.argmax(scores[idx])]
+        elif mode == "min":
+            best_idx = idx[np.argmin(scores[idx])]
+
+        keep_mask[best_idx] = True 
+
+    return keep_mask
+
+def get_bad_source_mask(
+        spikes: pd.DataFrame,
+        score: np.ndarray,
+        threshold: float = 0.9,
+        mode: Literal["below", "above"] = "below",
+        min_num_spikes: int = 10
+) -> np.ndarray:
+    """
+    Generate a boolean mask that filters out bad sources 
+    based on a quality score and minimum number of spikes. 
+
+    Args
+    ----
+        spikes : pd.DataFrame
+            Spike data frame
+        score : np.ndarray
+            Vector of scores
+        threshold : float
+            Threshold used classify bad and good sources
+        mode : {"below", "above"} , default "below"         
+            Weather values below or above the threshold are
+            considered bad
+        min_number_of_spikes : int
+            Minimum number of spikes required for a good source
+
+    Returns
+    -------
+        keep_mask : np.ndarray (n_units,)
+            Boolean mask of bad sources 
+            (True: keep source, False: reject source) 
+    """
+
+    units = sorted(spikes["unit_id"].unique())
+    n_source = len(score)
+
+    # Initialize mask 
+    keep_mask = np.ones(n_source, dtype=bool)
+
+    # Reject bad sources
+    for i in range(n_source):
+
+        local_spikes = spikes[spikes["unit_id"] == units[i]]["onset"].values
+        n_spikes = len(local_spikes)  
+        if n_spikes < min_num_spikes:
+            keep_mask[i] = False 
+
+        if mode == "below" and score[i] < threshold:
+            keep_mask[i] = False
+        elif mode == "above" and score[i] > threshold:
+            keep_mask[i] = False
+
+    return keep_mask
 
