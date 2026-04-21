@@ -21,7 +21,7 @@ from ..evaluation.evaluate import (
 
 class PostProcessSpikes:
     """
-    Class to preprocess HD-EMG data.
+    Class to post process motor unit spike trains.
 
     Parameters
     ----------
@@ -39,15 +39,16 @@ class PostProcessSpikes:
                 "max_shift": float,
                 "tolerance": float,
                 "threshold": float,
-                "quality_metric": "sil" | "cov_isi",
+                "quality_metric": str,
                 "mode": "max" | "min"
             }
 
-        **Bad Source Detection**: Automatically detect bad sources::  
+        **Bad Source Detection**: Automatically detect bad sources based on a quality
+        metric and some theshold::  
 
             {
                 "step": "bad_source_detection",
-                "quality_metric": "sil" | "cov_isi",
+                "quality_metric": str,
                 "threshold_value": float,
                 "min_spikes": int,
                 "mode": "below" | "above" 
@@ -116,13 +117,13 @@ class PostProcessSpikes:
         max_shift: float = 0.01
         tolerance: float = 0.001
         threshold: float = 0.3
-        quality_metric: Literal["sil", "cov_isi"] = "sil"
+        quality_metric: str = "sil"
         window: tuple[float, float] = (0, -1)
         mode: Literal["max", "min"] = "max"
 
     class BadSourceDetection(BaseModel):
         step: Literal["bad_source_detection"]
-        quality_metric: Literal["sil", "cov_isi"]
+        quality_metric: str = "sil"
         threshold: float = 0.9
         min_spikes: int = 10
         mode: Literal["above", "below"] = "below" 
@@ -161,6 +162,11 @@ class PostProcessSpikes:
 
         if isinstance(step, self.RemoveDuplicates):
 
+            if not step.quality_metric in scores.keys():
+                raise ValueError(
+                    f"The slected qaulity metric {step.quality_metric} is not defined"
+                )
+
             local_mask = get_duplicates_mask(
                 spikes=spikes,
                 scores=scores[step.quality_metric],
@@ -176,6 +182,11 @@ class PostProcessSpikes:
             source_mask = source_mask & local_mask
 
         elif isinstance(step, self.BadSourceDetection):
+
+            if not step.quality_metric in scores.keys():
+                raise ValueError(
+                    f"The slected qaulity metric {step.quality_metric} is not defined"
+                )
 
             local_mask = get_bad_source_mask(
                 spikes=spikes,
@@ -196,18 +207,14 @@ class PostProcessSpikes:
 
     def post_process(
             self, 
-            data: np.ndarray, # (n_channels x n_samples)
             spikes: pd.DataFrame, 
             fsamp: float,
             scores: dict | None = None,
-            sources: np.ndarray | None = None, # (n_sources x n_samples)
-            unmixing_weights: np.ndarray | None = None,
-            whitening_matrix: np.ndarray | None = None, 
-            unmixing_format: Literal["white", "extended"] = "white"
+            sources: np.ndarray | None = None
     ):
         
         """
-        Post process multi-channel time series data using the 
+        Post process decomposed motor unit spike trains
         specified list of steps.
 
         Args
@@ -237,11 +244,6 @@ class PostProcessSpikes:
             metadata (dict): TODO    
         
         """
-
-        self.unmixing_weights_ = unmixing_weights
-        self.whiten_ = whitening_matrix
-        self.unmixing_format_ = unmixing_format
-
 
         metadata = {}
         metadata["fsamp_out"] = fsamp
@@ -275,6 +277,73 @@ class PostProcessSpikes:
     
 
 class PostProcessCBSS(_BaseCBSS, PostProcessSpikes):
+    """
+    
+    Class to post process motor unit spike trains making
+    integrating the CBSS framework 
+    
+    Parameters
+    ----------
+    steps : list of dict
+        List of post processing steps. Each step is a dictionary describing
+        the processing operation.
+
+        Supported step types are:
+        "remove_dublicates", "bad_source_detection", "mask_sources"
+
+        **Remove Duplicates**: Automatically detect duplicates in your sources::
+
+            {
+                "step": "remove_duplicates",
+                "max_shift": float,
+                "tolerance": float,
+                "threshold": float,
+                "quality_metric": str,
+                "mode": "max" | "min"
+            }
+
+        **Bad Source Detection**: Automatically detect bad sources based on a quality
+        metric and some theshold::  
+
+            {
+                "step": "bad_source_detection",
+                "quality_metric": str,
+                "threshold_value": float,
+                "min_spikes": int,
+                "mode": "below" | "above" 
+            } 
+
+        **Mask Sources**: Mask all sources given in "sources_list" to be excluded in the following. 
+        Can be either used to reject known bad sources or limit the analysis to a subset of your data::  
+
+            {
+                "step": "mask_sources",
+                "source_list": list[int]
+            }
+
+        **Predict Spikes**: Use the learned unmixing weights to predict 
+        motor unit spikes in the time window specified by t_start and 
+        t_end::
+
+            {
+                "step": "predict_spikes",
+                "t_start": float,
+                "t_end": float
+            
+            }
+
+        **Fit From Spikes**: Supervised learning of  the unmixing weights of a 
+        CBSS model given a set of motor unit spike labels (in the specified time 
+        window). The learned unmixing weights are then applied to the data::
+
+            {
+                "step": "predict_spikes",
+                "t_start": float,
+                "t_end": float
+            
+            }        
+    
+    """
 
     def __init__(
             self, 
@@ -302,14 +371,14 @@ class PostProcessCBSS(_BaseCBSS, PostProcessSpikes):
         ]
         self.max_spike_shifts = max_spike_shifts
 
-    class ApplyUnmixing(BaseModel):
-        step: Literal["apply_unmixing"]
+    class PredictSpikes(BaseModel):
+        step: Literal["predict_spikes"]
         rewhiten: bool = True
         t_start: float = 0
         t_end: float = -1 
 
-    class FitSpikes(BaseModel):
-        step: Literal["fit_spikes"]
+    class FitFromSpikes(BaseModel):
+        step: Literal["fit_from_spikes"]
         t_start: float = 0
         t_end: float = -1    
 
@@ -318,8 +387,8 @@ class PostProcessCBSS(_BaseCBSS, PostProcessSpikes):
             PostProcessSpikes.RemoveDuplicates, 
             PostProcessSpikes.BadSourceDetection,
             PostProcessSpikes.MaskSources,
-            ApplyUnmixing,
-            FitSpikes,
+            PredictSpikes,
+            FitFromSpikes,
         ],
         Field(discriminator="step")
     ]
@@ -394,6 +463,9 @@ class PostProcessCBSS(_BaseCBSS, PostProcessSpikes):
         # Convert dict of spikes to long-formated spike table 
         new_spikes = spike_dict_to_long_df(new_spikes)    
 
+        # Update the unmixing format
+        self.unmixing_format_ = "white"
+
         return new_spikes, sources, scores
 
     def _optimze_delay(self, X, spikes, fsamp):
@@ -444,7 +516,7 @@ class PostProcessCBSS(_BaseCBSS, PostProcessSpikes):
     ):
         
         """
-        Post process multi-channel time series data using the 
+        Post process decomposed motor unit spike trains
         specified list of steps.
 
         Args
@@ -499,26 +571,32 @@ class PostProcessCBSS(_BaseCBSS, PostProcessSpikes):
                     source_mask = source_mask
                 )
 
-                if isinstance(step, self.ApplyUnmixing):
+                if isinstance(step, self.PredictSpikes):
 
                     sample_idx = self._get_win_samples(
                         data, fsamp, step.t_start, step.t_end
                     )
                     if step.rewhiten:
-                        self.rewhiten(data[:, sample_idx])
+                        self.rewhiten(data[:, sample_idx])  
+
+                    if unmixing_format == "extended":
+                        self.unmixing_weights_ = self.whiten_ @ self.unmixing_weights_
+                        self.unmixing_format_ = "white"
+
                     spikes, sources, local_scores = self.predict(
                         sig=data[:, sample_idx],
                         fsamp=fsamp
                     )
                     scores.update(local_scores)
                     
-                elif isinstance(step, self.FitSpikes):
+                elif isinstance(step, self.FitFromSpikes):
 
                     spikes, sources, local_scores = self.fit_predict_from_spike_labels(
                         sig=data,
                         fsamp=fsamp,
                         spikes=spikes
                     )
+                    self.unmixing_format_ = "white"
                     scores.update(local_scores)    
 
         new_spikes, label_map = filter_spikes(spikes, source_mask)
