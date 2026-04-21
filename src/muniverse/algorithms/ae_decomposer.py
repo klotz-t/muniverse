@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from .cbss import _BaseCBSS
 # Reuse your existing utilities (same package structure as your CBSS snippet)
 from .core import (
     bandpass_signals,
@@ -11,8 +11,8 @@ from .core import (
     extension,
     whitening,
     est_spike_times,
-    remove_duplicates,
-    remove_bad_sources,
+    # remove_duplicates,
+    # remove_bad_sources,
     peel_off,
 )
 
@@ -20,14 +20,21 @@ from .core import (
 #   Building blocks
 # ----------------------------
 
-class OrthogonalEncoderSO(nn.Module):
+class _OrthogonalEncoderSO(nn.Module):
     """
     Orthogonally constrained linear map V \in SO(Din), then we take the
     first Dout rows to get a rectangular encoder W = V[:Dout, :].
 
     Forward: y = W @ x, where x: [B, Din] (time-batch), y: [B, Dout].
     """
-    def __init__(self, din: int, dout: int, init_scale: float = 1e-3, device="cpu", dtype=torch.float32):
+    def __init__(
+            self, 
+            din: int, 
+            dout: int, 
+            init_scale: float = 1e-3, 
+            device="cpu", 
+            dtype=torch.float32
+    ):
         super().__init__()
         assert dout <= din, "dout must be <= din (take first rows of SO(din))."
         self.din = din
@@ -37,7 +44,14 @@ class OrthogonalEncoderSO(nn.Module):
             nn.Parameter(init_scale * torch.randn(din, din, device=device, dtype=dtype))
         )
 
-    def forward(self, x: torch.Tensor) -> (torch.Tensor, torch.Tensor):
+    def forward(
+            self, 
+            x: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        TODO Add Docstring
+        
+        """
         # Skew-symmetric parameter -> Lie algebra so(n)
         # K = A - A^T, then V = expm(K) \in SO(n)
         K = self.A - self.A.transpose(-1, -2)
@@ -47,24 +61,35 @@ class OrthogonalEncoderSO(nn.Module):
         return y, W  # return W so we can export filters later
 
 
-class TanhshrinkLayer(nn.Module):
+class _TanhshrinkLayer(nn.Module):
     def forward(self, x):
         return x - torch.tanh(x)
 
 
-class EMGAutoencoder(nn.Module):
+class _EMGAutoencoder(nn.Module):
     """
     Encoder: y = ReLU( W x ), with W orthogonal rows from SO(Din)
     Decoder: x_hat = Tanhshrink( y @ Z^T + b ), fully unconstrained
     """
-    def __init__(self, din: int, dlat: int, device="cpu", dtype=torch.float32):
+    def __init__(
+            self, 
+            din: int, 
+            dlat: int, 
+            device="cpu", 
+            dtype=torch.float32
+    ):
+
         super().__init__()
         if isinstance(dtype, str):
             dtype = getattr(torch, dtype)
-        self.encoder = OrthogonalEncoderSO(din, dlat, device=device, dtype=dtype)
+        self.encoder = _OrthogonalEncoderSO(
+            din, dlat, device=device, dtype=dtype
+        )
         self.relu = nn.ReLU(inplace=False)
-        self.decoder = nn.Linear(dlat, din, bias=True, device=device, dtype=dtype)
-        self.tanhshrink = TanhshrinkLayer()
+        self.decoder = nn.Linear(
+            dlat, din, bias=True, device=device, dtype=dtype
+        )
+        self.tanhshrink = _TanhshrinkLayer()
 
         # Xavier init for decoder
         nn.init.xavier_uniform_(self.decoder.weight)
@@ -79,29 +104,9 @@ class EMGAutoencoder(nn.Module):
         s_hat = self.relu(y_lin)        # nonnegative sparse spikes
         x_lin = self.decoder(s_hat)     # [B, Din]
         x_hat = self.tanhshrink(x_lin)  # denoise tiny values
+
         return x_hat, s_hat, W
 
-
-# ----------------------------
-#   Losses
-# ----------------------------
-
-def lp_lq_sparsity(s_hat: torch.Tensor, p=0.9, q=1.8, eps=1e-8):
-    """
-    Temporal sparsity penalty: log10( (q/p) * ||s||_p / ||s||_q ), averaged over units.
-    s_hat: [B, dlat]
-    We compute norms over time within a window; aggregate across batch as mean.
-    """
-    # Sum across batch -> a time-aggregated view for this mini-batch
-    # (treat batch as temporal slices)
-    ss = torch.clamp(s_hat, min=0.0)  # already ReLU but be safe
-    # Compute norms per-unit across batch
-    # Avoid zero by eps to keep gradient stable
-    lp = torch.pow(torch.sum(torch.pow(ss + eps, p), dim=0) + eps, 1.0 / p)   # [dlat]
-    lq = torch.pow(torch.sum(torch.pow(ss + eps, q), dim=0) + eps, 1.0 / q)   # [dlat]
-    ratio = (q / p) * (lp / (lq + eps))
-    pen = torch.log10(ratio + eps).mean()
-    return pen
 
 
 # ----------------------------
@@ -162,7 +167,11 @@ class AEDecoder:
     Autoencoder-based EMG decomposition (unsupervised), closely following Mayer et al. (2023).
     Public API mirrors CBSS.decompose(sig, fsamp).
     """
-    def __init__(self, config: AEDecoderConfig | None = None, **kwargs):
+    def __init__(
+            self, 
+            config: AEDecoderConfig | None = None, **kwargs
+    ):
+        
         self.cfg = config if config is not None else AEDecoderConfig()
         for k, v in kwargs.items():
             setattr(self.cfg, k, v)
@@ -171,8 +180,12 @@ class AEDecoder:
         torch.manual_seed(self.cfg.random_seed)
         np.random.seed(self.cfg.random_seed)
 
-    def _to_torch(self, x: np.ndarray) -> torch.Tensor:
-        # Convert device and dtype to proper PyTorch objects
+    def _to_torch(
+            self, 
+            x: np.ndarray
+    ) -> torch.Tensor:
+        """Convert device and dtype to PyTorch objects"""
+
         device = torch.device(self.cfg.device) if isinstance(self.cfg.device, str) else self.cfg.device
         if isinstance(self.cfg.dtype, str):
             dtype = getattr(torch, self.cfg.dtype)
@@ -189,22 +202,22 @@ class AEDecoder:
           - whitening (returns whitened signal and whitening matrix Z)
         """
         # Bandpass
-        if self.cfg.bandpass is not None:
-            sig = bandpass_signals(
-                sig, fsamp,
-                high_pass=self.cfg.bandpass[0],
-                low_pass=self.cfg.bandpass[1],
-                order=self.cfg.bandpass_order
-            )
-        # Notch
-        if self.cfg.notch_frequency is not None:
-            sig = notch_signals(
-                sig, fsamp,
-                nfreq=self.cfg.notch_frequency,
-                dfreq=self.cfg.notch_width,
-                order=self.cfg.notch_order,
-                n_harmonics=self.cfg.notch_n_harmonics,
-            )
+        # if self.cfg.bandpass is not None:
+        #     sig = bandpass_signals(
+        #         sig, fsamp,
+        #         high_pass=self.cfg.bandpass[0],
+        #         low_pass=self.cfg.bandpass[1],
+        #         order=self.cfg.bandpass_order
+        #     )
+        # # Notch
+        # if self.cfg.notch_frequency is not None:
+        #     sig = notch_signals(
+        #         sig, fsamp,
+        #         nfreq=self.cfg.notch_frequency,
+        #         dfreq=self.cfg.notch_width,
+        #         order=self.cfg.notch_order,
+        #         n_harmonics=self.cfg.notch_n_harmonics,
+        #     )
 
         # Temporal extension
         ext_sig = extension(sig, self.cfg.ext_fact)  # [m*R, T]
@@ -216,7 +229,7 @@ class AEDecoder:
         ext_sig[:, -cut:] = 0
 
         # Whitening
-        white_sig, Z = whitening(
+        white_sig, Z, Zinv = whitening(
             Y=ext_sig,
             method=self.cfg.whitening_method,
             backend="svd",
@@ -224,7 +237,10 @@ class AEDecoder:
         )
         return white_sig, Z  # shapes: [mR, T], [mR, mR]
 
-    def _iter_minibatches(self, Xw: np.ndarray):
+    def _iter_minibatches(
+            self, 
+            Xw: np.ndarray
+    ):
         """
         Yield batched [B, Din] slices from Xw.T (Din = mR).
         """
@@ -239,38 +255,56 @@ class AEDecoder:
             xb = Xw[:, sel].T  # [B, Din]
             yield xb
 
-    def _build_model(self, din: int, m_orig: int):
-        dlat = self.cfg.latent_dim if self.cfg.latent_dim is not None else m_orig
-        model = EMGAutoencoder(
+    def _build_model(
+            self, 
+            din: int, 
+            m_orig: int
+    ):
+        """TODO Add Docstring"""
+
+        if self.cfg.latent_dim is not None:
+            dlat = self.cfg.latent_dim
+        else:
+            dlat = m_orig
+
+        self.autoencoder = _EMGAutoencoder(
             din=din,
             dlat=dlat,
             device=self.cfg.device,
             dtype=self.cfg.dtype
         )
         # Convert device to proper PyTorch object
-        device = torch.device(self.cfg.device) if isinstance(self.cfg.device, str) else self.cfg.device
-        return model.to(device)
+        if isinstance(self.cfg.device, str):
+            device = torch.device(self.cfg.device) 
+        else:
+            device = self.cfg.device
 
-    def _train(self, model: EMGAutoencoder, Xw: np.ndarray):
+        self.autoencoder.to(device)    
+
+    def _train(self, Xw: np.ndarray):
+        """TODO Add Docstring"""
+
         optim = torch.optim.Adam(
-            model.parameters(),
+            self.autoencoder.parameters(),
             lr=self.cfg.learning_rate,
             weight_decay=self.cfg.weight_decay
         )
 
         Din = Xw.shape[0]
-        model.train()
+        self.autoencoder.train()
         for epoch in range(self.cfg.epochs):
             epoch_loss = 0.0
             nb = 0
             for xb_np in self._iter_minibatches(Xw):
                 xb = self._to_torch(xb_np)  # [B, Din]
                 optim.zero_grad()
-                x_hat, s_hat, _ = model(xb)
+                x_hat, s_hat, _ = self.autoencoder(xb)
                 # Reconstruction on whitened, extended space (like paper)
                 rec = F.mse_loss(x_hat, xb)
                 # Temporal sparsity
-                sp = lp_lq_sparsity(s_hat, p=self.cfg.sparsity_p, q=self.cfg.sparsity_q)
+                sp = self._lp_lq_sparsity(
+                    s_hat, p=self.cfg.sparsity_p, q=self.cfg.sparsity_q
+                )
                 loss = rec + self.cfg.lambda_sparsity * sp
                 loss.backward()
                 optim.step()
@@ -279,21 +313,25 @@ class AEDecoder:
                 nb += 1
             # (Optional) print training progress
             # print(f"[AE] epoch {epoch+1}/{self.cfg.epochs}  loss={epoch_loss/max(1,nb):.5f}")
-        return model
 
-    def _infer_sources_full(self, model: EMGAutoencoder, Xw: np.ndarray):
+    def _infer_sources_full(
+            self, 
+            Xw: np.ndarray
+    ):
         """
         Run the full sequence through the encoder to get latent sources (over time).
         Returns:
           S: [dlat, T]  (nonnegative spikes)
           W: [dlat, Din] (encoder filters over whitened-extended space)
         """
-        model.eval()
+        self.autoencoder.eval()
+
         with torch.no_grad():
             Xw_t = self._to_torch(Xw.T)  # [T, Din]
-            x_hat, s_hat, W = model(Xw_t)  # s_hat: [T, dlat]
+            x_hat, s_hat, W = self.autoencoder(Xw_t)  # s_hat: [T, dlat]
             S = s_hat.transpose(0, 1).cpu().numpy()  # [dlat, T]
             W_np = W.detach().cpu().numpy()          # [dlat, Din]
+
         return S, W_np
 
     def _postprocess(self, S: np.ndarray, fsamp: float, Xw: np.ndarray):
@@ -308,7 +346,7 @@ class AEDecoder:
         # spike picking on each latent
         for i in range(n_mu):
             spk, si = est_spike_times(
-                S[i, :], fsamp, cluster=self.cfg.cluster_method
+                S[i, :], fsamp
             )
             spikes[i] = spk
             sil[i] = si
@@ -327,30 +365,72 @@ class AEDecoder:
                 )
 
         # Remove duplicates
-        sources, spikes, sil, _ = remove_duplicates(
-            S, spikes, sil, np.zeros((Xw.shape[0], n_mu)), fsamp,
-            max_shift=self.cfg.match_max_shift,
-            tol=self.cfg.match_tol,
-            threshold=self.cfg.match_th
-        )
-        # Remove bad
-        sources, spikes, sil, _ = remove_bad_sources(
-            sources, spikes, sil, np.zeros((Xw.shape[0], sources.shape[0])),
-            threshold=self.cfg.sil_th, min_num_spikes=self.cfg.min_num_spikes
-        )
+        # sources, spikes, sil, _ = remove_duplicates(
+        #     S, spikes, sil, np.zeros((Xw.shape[0], n_mu)), fsamp,
+        #     max_shift=self.cfg.match_max_shift,
+        #     tol=self.cfg.match_tol,
+        #     threshold=self.cfg.match_th
+        # )
+        # # Remove bad
+        # sources, spikes, sil, _ = remove_bad_sources(
+        #     sources, spikes, sil, np.zeros((Xw.shape[0], sources.shape[0])),
+        #     threshold=self.cfg.sil_th, min_num_spikes=self.cfg.min_num_spikes
+        # )
+
+        sources = S
+
         return sources, spikes, sil
-
-    def decompose(self, sig: np.ndarray, fsamp: float):
+    
+    def _lp_lq_sparsity(
+            self, 
+            s_hat: torch.Tensor, 
+            p=0.9, 
+            q=1.8, 
+            eps=1e-8
+    ):
         """
-        Args:
-            sig: EMG (n_channels x n_samples)
-            fsamp: sampling frequency (Hz)
+        Temporal sparsity penalty: log10( (q/p) * ||s||_p / ||s||_q ), averaged over units.
+        s_hat: [B, dlat]
+        We compute norms over time within a window; aggregate across batch as mean.
+        """
+        # Sum across batch -> a time-aggregated view for this mini-batch
+        # (treat batch as temporal slices)
+        ss = torch.clamp(s_hat, min=0.0)  # already ReLU but be safe
+        # Compute norms per-unit across batch
+        # Avoid zero by eps to keep gradient stable
+        lp = torch.pow(torch.sum(
+            torch.pow(ss + eps, p), dim=0) + eps, 1.0 / p
+        )   # [dlat]
+        lq = torch.pow(torch.sum(
+            torch.pow(ss + eps, q), dim=0) + eps, 1.0 / q
+        )   # [dlat]
+        ratio = (q / p) * (lp / (lq + eps))
+        pen = torch.log10(ratio + eps).mean()
+        return pen
 
-        Returns:
-            sources (ndarray): Estimated spike responses (n_mu x n_samples) in latent space
-            spikes (dict): Sample indices of motor neuron discharges
-            sil (ndarray): Silhouette-like scores per source
-            mu_filters (ndarray): Encoder filters over whitened-extended space [dlat, mR]
+    def fit_predict(
+            self, 
+            sig: np.ndarray, 
+            fsamp: float
+    ):
+        """
+        Args
+        ----
+            sig : np.ndarray 
+                EMG data (n_channels, n_samples)
+            fsamp: float 
+                sampling frequency (Hz)
+
+        Returns
+        -------
+            sources : ndarray 
+                Estimated latents respresenting sources (n_mu x n_samples)
+            spikes : dict 
+                Sample indices of motor neuron discharges
+            sil : np.ndarray 
+                Silhouette-like scores per source
+            mu_filters : np.ndarray 
+                Encoder filters over whitened-extended space (dlat, mR)
         """
         # ---- Preprocess (extension + whitening) ----
         Xw, Z = self._prep_signal(sig, fsamp)  # [mR, T], [mR, mR]
@@ -360,10 +440,10 @@ class AEDecoder:
 
         # ---- Build & train AE ----
         model = self._build_model(din=Din, m_orig=m)
-        model = self._train(model, Xw)
+        model = self._train(Xw)
 
         # ---- Infer latent sources across full sequence ----
-        S, W = self._infer_sources_full(model, Xw)  # S: [dlat, T], W: [dlat, Din]
+        S, W = self._infer_sources_full(Xw)  # S: [dlat, T], W: [dlat, Din]
 
         # ---- Postprocess (spikes, duplicates, pruning) ----
         sources, spikes, sil = self._postprocess(S, fsamp, Xw)
