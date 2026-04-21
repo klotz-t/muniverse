@@ -356,7 +356,7 @@ def find_outliers(
         x: np.ndarray, # (n_features, )
         threshold: float = 3, 
         max_iter: int = 3, 
-        tail: Literal[-1,0,1] = 0,
+        mode: Literal["above", "below", "two-sided"] = "two-sided",
         mask: np.ndarray | None = None
 ) -> np.ndarray:
     """
@@ -372,10 +372,10 @@ def find_outliers(
             Threshold for outlier detection
         max_iter: int , default 3
              Maximum number of iterations
-        tail : {-1,0,1} , default 0 
+        mode : {"above", "below", "two-sided"} , default "two-sided"
             Specify weather to serach for outliers   
-            on both ends (0), just on the positive (1) or just 
-            the negative side (-1).
+            on both ends ("two-sided"), just on the positive ("above") 
+            or just the negative side ("below").
         mask : np.ndarray | None , default None
             Boolean mask to exclude channels from outlier detection
             (True: outlier, False: no outlier)    
@@ -393,9 +393,9 @@ def find_outliers(
     iter = 0
     while iter < max_iter:
         xm = np.ma.masked_array(x, mask=mask)
-        if tail == 1:
+        if mode == "above":
             idx = zscore(xm) > threshold
-        elif tail == -1:
+        elif mode == "below":
             idx = -zscore(xm) > threshold
         else:
             idx = np.abs(zscore(xm)) > threshold 
@@ -924,4 +924,71 @@ def get_bad_source_mask(
             keep_mask[i] = False
 
     return keep_mask
+
+def filter_spikes(    
+    spikes: pd.DataFrame, 
+    keep_mask: np.ndarray
+) -> tuple[pd.DataFrame, dict]:
+    """
+    Filter BIDS spike events using a boolean mask.
+
+    Parameters
+    ----------
+    spikes : pd.DataFrame
+        BIDS events table. Must contain a column with unit_id labels.
+    keep_mask : np.ndarray (bool)
+        Boolean mask of shape (n_units,) indicating kept sources.
+
+    Returns
+    -------
+    spikes : pd.DataFrame
+        Filtered spikes with masked units removed and remapped labels 
+    label_mapping : dict
+        Mapping of from old to new unit_id labels
+    """
+
+    spikes = spikes.copy()
+
+    # --- keep only valid units ---
+    valid_units = np.where(keep_mask)[0]
+    spikes = spikes[spikes["unit_id"].isin(valid_units)]
+
+    # --- remap labels to 0..N-1 ---
+    unique_units = np.sort(spikes["unit_id"].unique())
+
+    label_map = {old: new for new, old in enumerate(unique_units)}
+
+    spikes["unit_id"] = spikes["unit_id"].map(label_map)
+
+    return spikes, label_map 
+
+def map_spikes(    
+    spikes: pd.DataFrame, 
+    fsamp: float,
+    t_start: float
+) -> tuple[pd.DataFrame, dict]:
+    """
+    Filter BIDS spike events using a boolean mask.
+
+    Parameters
+    ----------
+    spikes : pd.DataFrame
+        BIDS events table. Must contain a column with unit_id labels
+    fsamp : float
+        Sampling rate in Hz
+    t_start : float
+        Global reference time frame (in seconds) 
+
+    Returns
+    -------
+    spikes : pd.DataFrame
+        Temporally mapped spikes
+    """
+
+    spikes = spikes.copy()
+
+    spikes["onset"] = spikes["onset"] + t_start
+    spikes["sample"] = spikes["sample"] + int(t_start * fsamp)
+
+    return spikes      
 

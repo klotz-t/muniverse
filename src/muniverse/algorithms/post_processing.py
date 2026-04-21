@@ -12,7 +12,8 @@ from .core import (
     spike_dict_to_long_df,
     get_duplicates_mask, 
     get_bad_source_mask,
-    spike_dict_to_long_df
+    spike_dict_to_long_df,
+    filter_spikes
 )    
 from ..evaluation.evaluate import (
     pseudo_sil_score
@@ -141,8 +142,6 @@ class post_processing:
         Supported step types are:
         "remove_dublicates", "bad_source_detection", "mask_sources"
 
-        max_shift=0.1, tol=0.001, threshold=0.3
-
         **Remove Duplicates**: Automatically detect duplicates in your sources::
 
             {
@@ -151,6 +150,7 @@ class post_processing:
                 "tolerance": float,
                 "threshold": float,
                 "quality_metric": "sil" | "cov_isi",
+                "mode": "max" | "min"
             }
 
         **Bad Source Detection**: Automatically detect bad sources::  
@@ -159,7 +159,8 @@ class post_processing:
                 "step": "bad_source_detection",
                 "quality_metric": "sil" | "cov_isi",
                 "threshold_value": float,
-                "min_spikes": int
+                "min_spikes": int,
+                "mode": "below" | "above" 
             } 
 
         **Mask Sources**: Mask all sources given in "sources_list" to be excluded in the following. 
@@ -170,34 +171,26 @@ class post_processing:
                 "source_list": list[int]
             }
 
-        **Map time window**: Map time samples from your decomposed segment to the 
-        global time of your emg recording. The values of t_start and t_end correspond to
-        the start and end of the decomposed segment::  
-
-            {
-                "step": "map_time_window",
-                "t_start": float,
-                "t_end": float 
-            }    
-
     Examples:
     ---------
     Post decomposition outputs by removing duplicates and rejecting bad sources.
     >>> model = post_processing(steps = [
-    >>>     {
-    >>>         "step": "remove_duplicates",
-    >>>         "max_shift": 0.01,
-    >>>         "tolerance": 0.001,
-    >>>         "threshold": "0.3",
-    >>>         "quality_metric": "sil"
-    >>>     },
-    >>>     {
-    >>>         "step": "bad_source_detection",
-    >>>         "quality_metric": "sil",
-    >>>         "threshold": 0.9,
-    >>>         "min_spikes": 10
-    >>>     },
-    >>> ])
+    ...     {
+    ...         "step": "remove_duplicates",
+    ...         "max_shift": 0.01,
+    ...         "tolerance": 0.001,
+    ...         "threshold": "0.3",
+    ...         "quality_metric": "sil",
+    ...         "mode": "max"
+    ...     },
+    ...     {
+    ...         "step": "bad_source_detection",
+    ...         "quality_metric": "sil",
+    ...         "threshold": 0.9,
+    ...         "min_spikes": 10,
+    ...         "mode": "below"
+    ...     },
+    ... ])
     >>> out = model.post_process(...)                     
 
     """
@@ -280,44 +273,6 @@ class post_processing:
         self.steps.append(
             self._adapter.validate_python(step)
         )
-
-    def _filter_events(
-            self, 
-            events, 
-            keep_mask
-    ):
-        """
-        Filter BIDS spike events using a boolean mask.
-
-        Parameters
-        ----------
-        events : pd.DataFrame
-            BIDS events table. Must contain a column with unit_id labels.
-        keep_mask : np.ndarray (bool)
-            Boolean mask of shape (n_units,) indicating kept sources.
-
-        Returns
-        -------
-        filtered_events : pd.DataFrame
-            Events with bad units removed and remapped labels 
-        label_mapping : dict
-            Mapping of from old to new unit_id labels
-        """
-
-        events = events.copy()
-
-        # --- keep only valid units ---
-        valid_units = np.where(keep_mask)[0]
-        events = events[events["unit_id"].isin(valid_units)]
-
-        # --- remap labels to 0..N-1 ---
-        unique_units = np.sort(events["unit_id"].unique())
-
-        label_map = {old: new for new, old in enumerate(unique_units)}
-
-        events["unit_id"] = events["unit_id"].map(label_map)
-
-        return events, label_map    
     
     def _apply_unmxing(
             self, 
@@ -479,7 +434,7 @@ class post_processing:
             data: np.ndarray, # (n_channels x n_samples)
             spikes: pd.DataFrame, 
             fsamp: float,
-            scores: dict | None,
+            scores: dict | None = None,
             sources: np.ndarray | None = None, # (n_sources x n_samples)
             unmixing_weights: np.ndarray | None = None,
             whitening_matrix: np.ndarray | None = None, 
@@ -498,12 +453,17 @@ class post_processing:
                 Lits of motor unit spikes    
             fsamp : float 
                 Sampling rate in Hz
+            scores : dict or None 
+                Dictonary of source quality scores     
             sources : np.ndarray or None (n_sources x n_samples)
                 The predicted sources
-            unmixing_weights: np.ndarray or None
-                Weights of the unmixing matrix
-            scores : dict
-                Dictonary of source quality scores    
+            unmixing_weights: np.ndarray or None , default None
+                Weights of the unmixing matrix 
+            whitening_matrix : np.ndarray or None , default None
+                Whitening matrix 
+            unmixing_format : {"white", "extended"} , default "white"    
+                Format in which the unmixing weights are provided
+
 
 
         Returns
@@ -593,12 +553,13 @@ class post_processing:
                         "Invalid step type"
                     )
         
-        new_spikes, label_map = self._filter_events(spikes, source_mask)
+        new_spikes, label_map = filter_spikes(spikes, source_mask)
         new_sources = sources[source_mask, :]
         new_scores = {
-            "sil": scores["sil"][source_mask]
+            "sil": scores["sil"][source_mask],
+            "cov_isi": scores["cov_isi"][source_mask]
         }
-        # new_weights = unmixing_weights[:, source_mask]
+        self.unmixing_weights_ = self.unmixing_weights_[:, source_mask]
 
  
         return new_spikes, new_sources, new_scores

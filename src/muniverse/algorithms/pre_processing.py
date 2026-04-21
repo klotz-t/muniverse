@@ -206,7 +206,7 @@ class pre_processing:
         method: Literal["zscore", "threshold"] = "zscore"
         threshold_value: float = 3
         max_iter: int | None = 3
-        tail: Literal[-1, 0, 1] = 0 
+        mode: Literal["above", "below", "two-sided"] = "two-sided"
         window: tuple[float, float] | None = None
         bandwidth: tuple[float, float] | None = None   
 
@@ -315,7 +315,7 @@ class pre_processing:
             method: Literal["zscore", "threshold"], 
             threshold_value: float, 
             max_iter: int | None = 3, 
-            tail: Literal[-1, 0, 1] = 0
+            mode: Literal["above", "below", "two-sided"] = "two-sided"
     ):
         """
         Automatically detect bad channels based on the scores of
@@ -334,10 +334,10 @@ class pre_processing:
                 scores are z-score normalized prior to thresholding.
             threshold_value : float
                 Treshold for bad channel detection
-            tail : {-1, 0, 1}
-                If 1 flag all values above the threshold;
-                If -1 flag all values below the threshold;
-                If 0 (only availible if method = "zscore"), flag all 
+            mode : {"above", "below", "two-sided"} , default "two-sided"
+                If "above" flag all values above the threshold;
+                If "below" flag all values below the threshold;
+                If "two-sided" (only availible if method = "zscore"), flag all 
                 channels with an absolute score above the threshold                    
 
         Returns
@@ -349,16 +349,16 @@ class pre_processing:
 
         if method == "zscore":
             mask = find_outliers(
-                score, threshold_value, max_iter=max_iter, tail=tail, mask=mask
+                score, threshold_value, max_iter=max_iter, mode=mode, mask=mask
             )
         elif method == "threshold":
-            if tail == 1:
+            if mode == "above":
                 mask = score > threshold_value
-            elif tail == -1:
+            elif mode == "below":
                 mask = score < threshold_value
             else:
                 raise ValueError(
-                    f"For method *{method}* tail must be -1 or 1."
+                    f"For method '{method}' tail must be 'above' or 'below'."
                 )
         else:
             raise ValueError(
