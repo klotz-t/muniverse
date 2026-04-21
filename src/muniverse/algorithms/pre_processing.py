@@ -13,7 +13,7 @@ from .core import (
 )
 
 
-class pre_processing:
+class PreProcessEMG:
     """
     Class to preprocess HD-EMG data.
 
@@ -84,18 +84,21 @@ class pre_processing:
         metric ("std" or "rms") computed in a given time window (given in seconds). 
         If method is "zscore" the score distribution is normalized (zero mean, 
         unit standard deviation). All scores are compared to a "threshold_value". 
-        If tail=1 all values above the threshold are rejected, if tail=-1 all values 
-        below the theshold are rejected. For tail=0 all the absolute value of the score
-        is computed and all values above the threshold are rejected (only availible 
-        if "method" == "zscore")::  
+        If mode is "above" all values above the threshold are rejected, if mode is "below" 
+        all values below the theshold are rejected. For mode="two-sided" the absolute value 
+        of the score is computed and all values above the threshold are rejected 
+        (only availible if "method" == "zscore")::  
 
             {
                 "step": "bad_channel_detection",
                 "metric": Literal["std", "rms", "medfreq", "medpower"],
                 "window": (t0, t1) | None, # Given in seconds, if None consider the full data
                 "method": "zscore" | "threshold",
+                "max_iter": int, # Needed if method is zscore
                 "threshold_value": float,
-                "tail": -1 | 0 | 1
+                "mode": "below" | "above" | "two-sided",
+                "bandwidth": (f0, f1) | None, # Bandwidth considered for freqeuncy-based metrics
+                "description": str
             } 
 
         **Mask Channels**: Mask all channels given in "channel_list" to be excluded in the following. 
@@ -103,7 +106,8 @@ class pre_processing:
 
             {
                 "step": "mask_channels",
-                "channel_list": list[int]
+                "channel_list": list[int],
+                "description": str
             }
 
         **Downsample**: Reduces the sampling frequency by the specified value::  
@@ -121,6 +125,15 @@ class pre_processing:
                 "t_start": float,
                 "t_end": float 
             }    
+
+        **Get metric**: Calculate for each channel the specified metric in the given 
+        time window. 
+
+            {
+                "step": "get_metric",
+                "metric": Literal["std", "rms", "medfreq", "medpower"],
+                "window": (t0, t1) | None, # Given in seconds, if None consider the full data
+            } 
 
     Examples:
     ---------
@@ -199,7 +212,7 @@ class pre_processing:
             ] = "butter" 
         order: int = 2
         dfreq: float = 1
-
+   
     class BadChannelDetection(BaseModel):
         step: Literal["bad_channel_detection"]
         metric: Literal["std", "rms", "medfreq", "medpower", "cumpower"]
@@ -208,11 +221,13 @@ class pre_processing:
         max_iter: int | None = 3
         mode: Literal["above", "below", "two-sided"] = "two-sided"
         window: tuple[float, float] | None = None
-        bandwidth: tuple[float, float] | None = None   
+        bandwidth: tuple[float, float] | None = None
+        description: str = "Automatical bad channel detection"   
 
     class MaskChannels(BaseModel):
         step: Literal["mask_channels"]
-        channel_list: list[int] = []    
+        channel_list: list[int] = []  
+        description: str = "Manually masked channel"  
 
     class Downsample(BaseModel):
         step: Literal["downsample"]
@@ -221,7 +236,14 @@ class pre_processing:
     class TimeWindow(BaseModel):
         step: Literal["time_window"]
         t_start: float = 0
-        t_end: float = -1    
+        t_end: float = -1
+
+    class GetMetric(BaseModel):
+        step: Literal["get_metric"]
+        metric: Literal["std", "rms", "medfreq", "medpower", "cumpower"]
+        window: tuple[float, float] | None = None
+        bandwidth: tuple[float, float] | None = None 
+        description: str = ""      
 
     PreprocessStep = Annotated[
         Union[Bandpass, 
@@ -231,7 +253,8 @@ class pre_processing:
             BadChannelDetection, 
             MaskChannels, 
             Downsample,
-            TimeWindow
+            TimeWindow,
+            GetMetric
         ],
         Field(discriminator="step")
     ]  
@@ -458,7 +481,7 @@ class pre_processing:
                     ch_status.loc[~local_mask, "status"] = "off"
                     ch_status.loc[
                         ~local_mask, "status_description"
-                    ] = step.model_dump().__str__()
+                    ] = step.description
                 elif isinstance(step, self.BadChannelDetection):
                     if step.window is not None:
                         idx0 = int(step.window[0] / fsamp_new)
@@ -479,7 +502,8 @@ class pre_processing:
                     ch_status.loc[bad_mask, "status"] = "off"
                     ch_status.loc[
                         bad_mask, "status_description"
-                    ] = step.model_dump().__str__()
+                    ] = step.description
+                    ch_status[step.metric] = scores
                 elif isinstance(step, self.Downsample):
                     data = data[:, ::step.factor]
                     sample_mask = sample_mask[::step.factor]
@@ -488,6 +512,16 @@ class pre_processing:
                     n_samples = data.shape[1]
                     t = np.linspace(0, (n_samples-1) / fsamp_new, n_samples)
                     sample_mask = np.argwhere((t >= step.t_start) & (t <= step.t_end)).flatten()
+                elif isinstance(step, self.GetMetric):
+                    if step.window is not None:
+                        idx0 = int(step.window[0] / fsamp_new)
+                        idx1 = int(step.window[1] / fsamp_new)
+                    else:
+                        idx0 = 0
+                        idx1 = data.shape[1]
+                    scores = self._get_scores(data[:, idx0:idx1], step.metric)
+                    col_name = f"{step.metric}{step.description}"
+                    ch_status[col_name] = scores
                 else:
                     raise ValueError(
                         "Invalid step type"
