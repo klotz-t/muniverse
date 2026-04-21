@@ -3,7 +3,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .cbss import _BaseCBSS
 # Reuse your existing utilities (same package structure as your CBSS snippet)
 from .core import (
     bandpass_signals,
@@ -190,8 +189,53 @@ class AEDecoderConfig:
 
 class AEDecoder:
     """
-    Autoencoder-based EMG decomposition (unsupervised), closely following Mayer et al. (2023).
-    Public API mirrors CBSS.decompose(sig, fsamp).
+    Class implementing autoencoder-based EMG (unsupervised) decomposition 
+
+    Properties
+    ----------
+        ext_fact : int, default 2
+            Number of delayed copies
+        ...    
+
+        epochs : int , default 100
+            TODO Describe
+        batch_size : int , default 5000         
+            Number of time samples per batch
+        learning_rate : float , default 8e-3
+            Learning rate used to train the autoencoder
+        sparsity_p : float, default 0.9
+            TODO
+        sparsity_q : float , default 1.8
+            TODO Describe
+        lambda_sparsity : float , default 1.0
+            TODO Describe
+        weight_decay : float, default 0.0
+            TODO Describe
+        device : str , default "cpu" TODO Add valid options
+            TODO Describe
+        dtype : TODO , default torch.float32 TODO Add valid options
+            TODO Describe
+        random_seed : int , default 1909
+            TODO Describe
+        shuffle_windows : bool , default True
+            TODO Describe
+
+
+    Attributes
+    ----------
+        autoencoder_ : nn.Module
+            Class for the data model 
+
+    
+    References
+    ----------
+    .. [1] Mayer et al. (2023).
+
+
+    Examples
+    --------
+    TODO Showcase API
+
     """
     def __init__(
             self, 
@@ -293,7 +337,7 @@ class AEDecoder:
         else:
             dlat = m_orig
 
-        self.autoencoder = _EMGAutoencoder(
+        self.autoencoder_ = _EMGAutoencoder(
             din=din,
             dlat=dlat,
             device=self.cfg.device,
@@ -305,7 +349,7 @@ class AEDecoder:
         else:
             device = self.cfg.device
 
-        self.autoencoder.to(device)    
+        self.autoencoder_.to(device)    
 
     def _train_autoencoder(self, Xw: torch.tensor):
         """
@@ -321,11 +365,11 @@ class AEDecoder:
 
         # Set up optimizer
         optim = torch.optim.Adam(
-            self.autoencoder.parameters(),
+            self.autoencoder_.parameters(),
             lr=self.cfg.learning_rate,
             weight_decay=self.cfg.weight_decay
         )
-        self.autoencoder.train()
+        self.autoencoder_.train()
 
         # Loop ober data batches
         for epoch in range(self.cfg.epochs):
@@ -335,7 +379,7 @@ class AEDecoder:
                 # Reset optimizer
                 optim.zero_grad()
                 # Estimate data
-                x_hat, s_hat, _ = self.autoencoder(xb)
+                x_hat, s_hat, _ = self.autoencoder_(xb)
                 # Compute the reconstruction error
                 rec = F.mse_loss(x_hat, xb)
                 # Compute the sparsity penalty
@@ -355,51 +399,36 @@ class AEDecoder:
     def _postprocess(
             self, 
             sources: np.ndarray, 
-            fsamp: float, 
-            Xw: np.ndarray
+            fsamp: float
+            #Xw: np.ndarray
     ):
-        """
-        Spike picking, duplicates, bad sources. Also (optionally) peel components and refit
-        to reduce interference.
-        """
+        """ Spike detection and source quality estimation"""
         n_mu = sources.shape[0]
         spikes = {i: [] for i in range(n_mu)}
         sil = np.zeros(n_mu)
 
-        # spike picking on each latent
+        # Spike detection on each latent 
         for i in range(n_mu):
             spikes[i], sil[i] = est_spike_times(
                 sources[i, :], fsamp
             )
 
-        # Optional peel-off in whitened domain (helps reduce overlap influence)
-        if self.cfg.enable_peel_off:
-            Xw_res = Xw.copy()
-            for i in range(n_mu):
-                if len(spikes[i]) == 0:
-                    continue
-                # peel_off expects channels x time; Xw_res is [Din, T] already
-                Xw_res, _, _ = peel_off(
-                    Xw_res, spikes[i],
-                    win=self.cfg.peel_win,
-                    fsamp=fsamp
-                )
-
-        # Remove duplicates
-        # sources, spikes, sil, _ = remove_duplicates(
-        #     S, spikes, sil, np.zeros((Xw.shape[0], n_mu)), fsamp,
-        #     max_shift=self.cfg.match_max_shift,
-        #     tol=self.cfg.match_tol,
-        #     threshold=self.cfg.match_th
-        # )
-        # # Remove bad
-        # sources, spikes, sil, _ = remove_bad_sources(
-        #     sources, spikes, sil, np.zeros((Xw.shape[0], sources.shape[0])),
-        #     threshold=self.cfg.sil_th, min_num_spikes=self.cfg.min_num_spikes
-        # )
+        # NOTE The output of the peel off seems to be never used
+        # # Optional peel-off in whitened domain (helps reduce overlap influence)
+        # if self.cfg.enable_peel_off:
+        #     Xw_res = Xw.copy()
+        #     for i in range(n_mu):
+        #         if len(spikes[i]) == 0:
+        #             continue
+        #         # peel_off expects channels x time; Xw_res is [Din, T] already
+        #         Xw_res, _, _ = peel_off(
+        #             Xw_res, spikes[i],
+        #             win=self.cfg.peel_win,
+        #             fsamp=fsamp
+        #         )
 
 
-        return sources, spikes, sil
+        return spikes, sil
     
     def _lp_lq_sparsity(
             self, 
@@ -467,13 +496,13 @@ class AEDecoder:
 
         # ---- Infer latent sources across full sequence ----
         with torch.no_grad():
-            x_hat, s_hat, W = self.autoencoder(Xw_torch.T)
+            x_hat, s_hat, W = self.autoencoder_(Xw_torch.T)
 
         sources = s_hat.transpose(0, 1).cpu().numpy()  # [dlat, T]
         mu_filters = W.detach().cpu().numpy().T     
 
         # ---- Postprocess (spikes, duplicates, pruning) ----
-        sources, spikes, sil = self._postprocess(sources, fsamp, Xw)
+        spikes, sil = self._postprocess(sources, fsamp)
 
         # Match output signature of CBSS
         # sources must be (n_mu x n_samples). Our latent 'sources' are over [T]; we already have that.
