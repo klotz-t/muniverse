@@ -456,7 +456,8 @@ def whitening(
         method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
             Whitening method 
         backend : {"ed", "svd"}, default "ed" 
-            Method used to calculate eigenvalues and eigenvectors
+            Method used to calculate eigenvalues and eigenvectors. Only needed 
+            if method is "ZCA" or "PCA".
         regularization : {"auto", float, None}, default "auto" 
             Adds a small value to the eigenvalues for regularization.
             If "auto", the mean of the second half of the eigenvalues is used.

@@ -43,6 +43,7 @@ class _BaseCBSS():
             self,
             ext_fact: int = 12,
             whitening_method: Literal["ZCA", "PCA", "Cholesky"] = "ZCA",
+            whitening_backend: Literal["ed, svd"] = "ed",
             whitening_reg: str | float | None = "auto",
             spike_detection_exp: float = 2,
             spike_detection_min_delay: float = 0.01,
@@ -51,6 +52,7 @@ class _BaseCBSS():
         # Default parameters
         self.ext_fact = ext_fact
         self.whitening_method = whitening_method
+        self.whwhitening_backend = whitening_backend
         self.whitening_reg = whitening_reg
         self.spike_detection_exp = spike_detection_exp
         self.spike_detection_min_delay = spike_detection_min_delay
@@ -97,6 +99,7 @@ class _BaseCBSS():
         white_sig, self.whiten_, self.unwhiten_ = whitening(
             Y = data, 
             method = self.whitening_method,
+            backend = self.whwhitening_backend, 
             regularization = self.whitening_reg 
         )
 
@@ -181,7 +184,7 @@ class _BaseCBSS():
 
         return spikes, sources, scores 
 
-class CBSS(_BaseCBSS):
+class FastIcaCBSS(_BaseCBSS):
     """
     Class implementing convolutive blind source separation (CBSS) 
     to identify the spiking activity of motor neurons given
@@ -212,6 +215,11 @@ class CBSS(_BaseCBSS):
 
         whitening_method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
             Method used for whitening
+
+        whitening_backend : {"ed", "svd"}, default "ed" 
+            Method used to calculate eigenvalues and eigenvectors. Can be
+            either based on singular value decomposition ("svd") or an
+            eigendecomposition ("ed"). Only needed if method is "ZCA" or "PCA".    
 
         whitening_regularization : {"auto", float, None}, default "auto" 
             Adds a small value to the eigenvalues for regularization. 
@@ -329,6 +337,7 @@ class CBSS(_BaseCBSS):
             random_seed: int = 1909,
             ext_fact: int = 12,
             whitening_method: Literal["ZCA", "PCA", "Cholesky"] = "ZCA",
+            whitening_backend: Literal["ed", "svd"] = "ed",
             whitening_reg: str | float | None = "auto",
             spike_detection_exp: float = 2,
             spike_detection_min_delay: float = 0.01,
@@ -355,6 +364,7 @@ class CBSS(_BaseCBSS):
         super().__init__(
             ext_fact = ext_fact,
             whitening_method = whitening_method,
+            whitening_backend = whitening_backend, 
             whitening_reg = whitening_reg,
             spike_detection_exp = spike_detection_exp,
             spike_detection_min_delay = spike_detection_min_delay,

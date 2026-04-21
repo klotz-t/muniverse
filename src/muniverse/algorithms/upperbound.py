@@ -9,7 +9,7 @@ from .core import (
 from .cbss import _BaseCBSS
 
 
-class UpperBound(_BaseCBSS):
+class UpperBoundCBSS(_BaseCBSS):
     """
     Class for computing an upper bound of convolutive blind source
     separation (CBSS) based motor neuron identification making use
@@ -28,15 +28,24 @@ class UpperBound(_BaseCBSS):
     ----------
         ext_fact : int , default 12
             Extension factor
+
         whitening_method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
             Method used for whitening
+
+        whitening_backend : {"ed", "svd"}, default "ed" 
+            Method used to calculate eigenvalues and eigenvectors. Can be
+            either based on singular value decomposition ("svd") or an
+            eigendecomposition ("ed"). Only needed if method is "ZCA" or "PCA". 
+
         whitening_regularization : {"auto", float, None}, default "auto" 
             Adds a small value to the eigenvalues for regularization. 
             If "auto", the mean of the second half of the eigenvalues is used.
+
         spike_cluster_method : {"kmeans", "gmm"}, default "kmeans" 
             Method used to seperate motor unit spikes and background spikes. 
             If "kmeans" the K-Means++ algorithm is applied (default), 
-            if "gmm" a Gaussian mixture model is fitted and used for clustering.      
+            if "gmm" a Gaussian mixture model is fitted and used for clustering.  
+
         verbose : float , default True
             If True, print progress. 
 
@@ -44,10 +53,13 @@ class UpperBound(_BaseCBSS):
     ----------
         unmixing_weights_ : np.ndarray (n_features, n_components)
             The learned unmixing weights
+
         whiten_ : np.ndarray (n_features, n_features)
             Whitening matrix   
+
         unwhiten_ : np.ndarray (n_features, n_features)
-            Inverse of the whitening matrix        
+            Inverse of the whitening matrix  
+
         expected_amplitudes_ : np.ndarray 
             For each motor unit impulse response and each delay the expected 
             spike amplitude. The algorithm selects for each motor unit
@@ -59,6 +71,7 @@ class UpperBound(_BaseCBSS):
             self,
             ext_fact: int = 12,
             whitening_method: Literal["ZCA", "PCA", "Cholesky"] = "ZCA",
+            whitening_backend: Literal["ed", "svd"] = "ed",
             whitening_reg: str | float | None = "auto",
             spike_detection_exp: float = 2,
             spike_detection_min_delay: float = 0.01,
@@ -69,6 +82,7 @@ class UpperBound(_BaseCBSS):
         super().__init__(
             ext_fact = ext_fact,
             whitening_method = whitening_method,
+            whitening_backend = whitening_backend,
             whitening_reg = whitening_reg,
             spike_detection_exp = spike_detection_exp,
             spike_detection_min_delay = spike_detection_min_delay,

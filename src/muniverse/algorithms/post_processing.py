@@ -350,6 +350,7 @@ class PostProcessCBSS(_BaseCBSS, PostProcessSpikes):
             steps = [],
             ext_fact = 12, 
             whitening_method = "ZCA", 
+            whitening_backend: Literal["ed", "svd"] = "ed",
             whitening_reg = "auto", 
             spike_detection_exp = 2, 
             spike_detection_min_delay = 0.01, 
@@ -359,6 +360,7 @@ class PostProcessCBSS(_BaseCBSS, PostProcessSpikes):
         super().__init__(
             ext_fact = ext_fact, 
             whitening_method = whitening_method, 
+            whitening_backend = whitening_backend,
             whitening_reg = whitening_reg, 
             spike_detection_exp = spike_detection_exp, 
             spike_detection_min_delay = spike_detection_min_delay, 
@@ -596,7 +598,6 @@ class PostProcessCBSS(_BaseCBSS, PostProcessSpikes):
                         fsamp=fsamp,
                         spikes=spikes
                     )
-                    self.unmixing_format_ = "white"
                     scores.update(local_scores)    
 
         new_spikes, label_map = filter_spikes(spikes, source_mask)
