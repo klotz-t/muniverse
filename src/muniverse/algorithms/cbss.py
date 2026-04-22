@@ -52,7 +52,7 @@ class _BaseCBSS():
         # Default parameters
         self.ext_fact = ext_fact
         self.whitening_method = whitening_method
-        self.whwhitening_backend = whitening_backend
+        self.whitening_backend = whitening_backend
         self.whitening_reg = whitening_reg
         self.spike_detection_exp = spike_detection_exp
         self.spike_detection_min_delay = spike_detection_min_delay
@@ -99,7 +99,7 @@ class _BaseCBSS():
         white_sig, self.whiten_, self.unwhiten_ = whitening(
             Y = data, 
             method = self.whitening_method,
-            backend = self.whwhitening_backend, 
+            backend = self.whitening_backend, 
             regularization = self.whitening_reg 
         )
 
@@ -249,7 +249,7 @@ class FastIcaCBSS(_BaseCBSS):
         ica_max_iter : int , default 100
             Maximum number of iterations for the fastICA fixed-point algorithm.  
 
-        ica_tol : float , default 1e-4 
+        ica_tol : float , default 5e-4 
             Convergence criterion for the fastICA fixed-point algorithm. Stops if 
             the dot product between the current and previous unmixing weights 
             minus 1 is less than the tolerance value.
@@ -347,7 +347,7 @@ class FastIcaCBSS(_BaseCBSS):
             ica_opt_fun_exp: float = 3,
             ica_opt_fun_eps: float = 1e-3,
             ica_max_iter: int = 100,
-            ica_tol: float = 1e-4,
+            ica_tol: float = 5e-4,
             ica_orthogonalization: Literal["gram-schmidt", "projection_deflation", None] = "gram-schmidt",
             refinement_loop: bool = True,
             refinement_loss: Literal["cov_isi", "sil"] = "cov_isi", 
