@@ -432,6 +432,7 @@ class PreProcessEMG:
             "status": ["on"] * data.shape[0],
             "status_description": ["n/a"] * data.shape[0],
         })
+        t_start = 0
 
         # Loop over all steps
         if self.steps is not None:
@@ -511,7 +512,10 @@ class PreProcessEMG:
                 elif isinstance(step, self.TimeWindow):
                     n_samples = data.shape[1]
                     t = np.linspace(0, (n_samples-1) / fsamp_new, n_samples)
-                    sample_mask = np.argwhere((t >= step.t_start) & (t <= step.t_end)).flatten()
+                    if step.t_end == -1:
+                        step.t_end = (n_samples - 1) / fsamp
+                    sample_mask = (t >= step.t_start) & (t <= step.t_end)
+                    t_start = t_start
                 elif isinstance(step, self.GetMetric):
                     if step.window is not None:
                         idx0 = int(step.window[0] / fsamp_new)
@@ -526,15 +530,19 @@ class PreProcessEMG:
                     raise ValueError(
                         "Invalid step type"
                     )
-        # Package process metadata in a dictonary        
-        metadata = {}
-        metadata["ch_mask"] = ch_mask
-        metadata["sample_mask"] = sample_mask
-        metadata["ch_status"] = ch_status
-        metadata["fsamp"] = fsamp_new
-
+                
         # Package the applied processing steps
         steps = [step.model_dump() for step in self.steps]
 
-        return data, metadata, steps
+        # Package process metadata in a dictonary        
+        metadata = {
+            "fsamp": fsamp,
+            "ch_mask": ch_mask,
+            "sample_mask": sample_mask,
+            "t_start": t_start,
+            "ch_status": ch_status,
+            "steps": steps
+        }
+
+        return data, metadata
 
