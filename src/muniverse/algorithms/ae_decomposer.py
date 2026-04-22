@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import Literal, List, Union, Annotated
 # Reuse your existing utilities (same package structure as your CBSS snippet)
 from .core import (
     bandpass_signals,
@@ -47,7 +48,7 @@ class _OrthogonalEncoderSO(nn.Module):
     def forward(
             self, 
             x: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> torch.Tensor:
         """
         TODO Add Docstring
         
@@ -167,9 +168,9 @@ class AEDecoder:
             TODO Describe
         weight_decay : float, default 0.0
             TODO Describe
-        device : str , default "cpu" TODO Add valid options
+        device : str or torch.device , default "cpu" 
             TODO Describe
-        dtype : TODO , default torch.float32 TODO Add valid options
+        dtype : torch.dtype , default torch.float32 
             TODO Describe
         random_seed : int , default 1909
             TODO Describe
@@ -200,9 +201,11 @@ class AEDecoder:
     """
     def __init__(
             self,
+            spike_detection_exp: float = 2,
+            spike_detection_min_delay: float = 0.01,
             ext_fact: int = 2, # R (paper found R=2 best)
-            whitening_method =  "ZCA", 
-            whitening_backend = "svd",
+            whitening_method: Literal["ZCA", "PCA", "Cholesky"] =  "ZCA", 
+            whitening_backend: Literal["ed", "svd"] = "svd",
             whitening_reg = "auto", 
             latent_dim: int | None = None,
             epochs: int = 100,
@@ -213,10 +216,12 @@ class AEDecoder:
             sparsity_eps: float = 1e-8,
             lambda_sparsity: float = 1.0,
             weight_decay: float = 0.0,
-            device: str = "cpu", # TODO Fix type
-            dtype = torch.float32, # TODO Fix type
+            device: torch.device | str = "cpu", 
+            dtype: torch.dtype | str = "float32", 
             random_seed: int = 1909, 
-            shuffle_windows: bool = True
+            shuffle_windows: bool = True,
+            verbose: bool = False,
+            config: dict | None = None, 
             #config: AEDecoderConfig | None = None, **kwargs
     ):
         
@@ -225,6 +230,10 @@ class AEDecoder:
         self.whitening_method = whitening_method
         self.whitening_reg = whitening_reg
         self.whitening_backend = whitening_backend
+
+        # Spike clustering
+        self.spike_detection_exp = spike_detection_exp
+        self.spike_detection_min_delay = spike_detection_min_delay
 
         # Model dims
         self.latent_dim = latent_dim  # default -> number of original channels m
@@ -241,6 +250,7 @@ class AEDecoder:
         self.random_seed = random_seed
         self.shuffle_windows = shuffle_windows
 
+        self.verbose = verbose
 
         if isinstance(device, str):
             self.device = torch.device(device) 
@@ -254,6 +264,18 @@ class AEDecoder:
         # For reproducibility
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
+
+        # Convert config object (if provided) to a dictionary
+        config_dict = vars(config) if config is not None else {}
+
+        valid_keys = self.__dict__.keys()
+
+        # Assign all parameters as attributes
+        for key, value in config_dict.items():
+            if key in valid_keys:
+                setattr(self, key, value)
+            else:
+                print(f"Warning: ignoring invalid parameter: {key}")
 
     def _to_torch(self, x: np.ndarray) -> torch.Tensor:
         """Convert numpy array to PyTorch object"""
@@ -348,13 +370,13 @@ class AEDecoder:
 
         self.autoencoder_.to(device)    
 
-    def _train_autoencoder(self, Xw: torch.tensor):
+    def _train_autoencoder(self, Xw: torch.Tensor):
         """
         Train the Autoencoder model given training data Xw
 
         Args
         ----
-            Xw : torch.tensor
+            Xw : torch.Tensor
                 Whitened data 
         
         
@@ -411,7 +433,10 @@ class AEDecoder:
         # Spike detection on each latent 
         for i in range(n_mu):
             spikes[i], scores["sil"][i] = est_spike_times(
-                sources[i, :], fsamp
+                source=sources[i, :], 
+                fsamp=fsamp, 
+                a=self.spike_detection_exp, 
+                min_delay=self.spike_detection_min_delay
             )
 
             if len(spikes[i]) > 2:

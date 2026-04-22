@@ -75,7 +75,7 @@ def decompose_scd(
     """
     # Initialize logger
     logger = AlgorithmLogger()
-    logger.log_data["Pipeline"]["Name"] = "MUniverse-SCD"
+    logger.log_data["Pipeline"]["Name"] = "MUniverse-SCD-Pipeline"
     logger.log_data["Pipeline"]["Description"] = "Motor unit identification algorithm"
         
     if engine == "host":
@@ -116,13 +116,13 @@ def decompose_scd(
         logger.set_algorithm_config(algo_cfg)
     else:
         # Load default configuration
-        config_dir = Path(__file__).parent.parent.parent / "configs"
+        config_dir = Path(__file__).parent.parent.parent.parent / "configs"
         algorithm_config = config_dir / "scd.json"
         if not algorithm_config.exists():
             raise FileNotFoundError(
                 f"Default SCD config not found at {algorithm_config}"
             )
-        algo_cfg = load_config(algorithm_config)
+        algo_cfg = load_config(str(algorithm_config))
         logger.set_algorithm_config(algo_cfg)
 
     # Create single run directory following neuromotion pattern
@@ -240,7 +240,7 @@ def decompose_upperbound(
     """
     # Initialize logger
     logger = AlgorithmLogger()
-    logger.log_data["Pipeline"]["Name"] = "MUniverse-UpperBound"
+    logger.log_data["Pipeline"]["Name"] = "MUniverse-UpperBoundCBSS-Pipeline"
     logger.log_data["Pipeline"]["Description"] = "Upper bound prediction for linear motor unit identification algorithms"
     
     # Set input data information
@@ -251,22 +251,17 @@ def decompose_upperbound(
 
     # Load and set algorithm configuration
     if algorithm_config:
-        # Handle nested Config structure if present
-        if "Config" in algorithm_config:
-            algo_cfg = algorithm_config["Config"]
-        else:
-            # Assume the dict is the config itself
-            algo_cfg = algorithm_config
+        algo_cfg = algorithm_config
         logger.set_algorithm_config(algo_cfg)
     else:
         # Load default configuration
-        config_dir = Path(__file__).parent.parent.parent / "configs"
+        config_dir = Path(__file__).parent.parent.parent.parent / "configs"
         algorithm_config_path = config_dir / "upperbound.json"
         if not algorithm_config_path.exists():
             raise FileNotFoundError(
                 f"Default UpperBound config not found at {algorithm_config_path}"
             )
-        algo_cfg = load_config(str(algorithm_config_path))["Config"]
+        algo_cfg = load_config(str(algorithm_config_path))
         logger.set_algorithm_config(algo_cfg)
 
     # Get sampling frequency from config
@@ -359,12 +354,7 @@ def decompose_cbss(
 
     # Load and set algorithm configuration
     if algorithm_config:
-        # Handle nested Config structure if present
-        if "Config" in algorithm_config:
-            algo_cfg = algorithm_config["Config"]
-        else:
-            # Assume the dict is the config itself
-            algo_cfg = algorithm_config
+        algo_cfg = algorithm_config
         logger.set_algorithm_config(algo_cfg)
     else:
         # Load default configuration
@@ -374,15 +364,10 @@ def decompose_cbss(
             raise FileNotFoundError(
                 f"Default CBSS config not found at {algorithm_config}"
             )
-        algo_cfg = load_config(algorithm_config)
+        algo_cfg = load_config(str(algorithm_config))
         logger.set_algorithm_config(algo_cfg)
 
     try:
-        # Apply start and end time to data
-        # start_time = algo_cfg["start_time"] * algo_cfg["sampling_frequency"]
-        # end_time = algo_cfg["end_time"] * algo_cfg["sampling_frequency"]
-        # data = data[:, int(start_time):int(end_time)]
-
         
         # Apply preprocessing steps
         if "preProcessingConfig" in algo_cfg.keys():
@@ -472,21 +457,36 @@ def decompose_ae(
     """
     Run Autoencoder-based decomposition.
 
-    Args:
-        data: EMG data (channels x samples)
-        algorithm_config: Optional dict with "Config" key or the raw config dict
-        metadata: Optional dict for logging (e.g., {"filename": "...", "format": "..."})
+    Args
+    ----
+        data : np.ndarray 
+            EMG data (n_channels, n_samples)
+        algorithm_config : dict (Optional) 
+            Dictonary with the pipeline configuration
+        metadata: dict (Optional)
+            Optional dictionary containing input data metadata for logging
 
-    Returns:
-        results dict with:
-            - sources: (n_units x n_samples)
-            - spikes:  {unit_id: np.ndarray of sample indices}
-            - silhouette: np.ndarray
-            - mu_filters: (n_units x (m*R))
-        and the logger data dict
+    Returns
+    -------
+        results : dict
+            Dictonary containing
+                - data (np.ndarray): Pre-processed data
+                - spikes (pd.DataFrame): Table of motor unit spikes
+                - sources (np.ndarray): Predicted sources
+                - scores (dict): Source quality metrics
+                - pre_process_metadata (dict): Metadata correspoding to
+                pre processing steps (Optional)
+                - post_process_metadata (dict): Metadata correspoding to
+                post processing steps (Optional)
+        log : dict
+            Dictonary of processing metadata        
+        model : FastIcaCBSS
+            The model used for decomposition
+
     """
+    
     logger = AlgorithmLogger()
-    logger.log_data["Pipeline"]["Name"] = "MUniverse-AE"
+    logger.log_data["Pipeline"]["Name"] = "MUniverse-AE-Pipeline"
     logger.log_data["Pipeline"]["Description"] = "Motor unit identification algorithm"
 
     # Input data metadata
@@ -503,33 +503,68 @@ def decompose_ae(
         algo_cfg = algorithm_config.get("Config", algorithm_config)
         logger.set_algorithm_config(algo_cfg)
     else:
-        config_dir = Path(__file__).parent.parent.parent / "configs"
-        config_path = config_dir / "ae_decomposer.json"
+        config_dir = Path(__file__).parent.parent.parent.parent / "configs"
+        config_path = config_dir / "ae.json"
         if not config_path.exists():
             raise FileNotFoundError(f"Default AE config not found at {config_path}")
-        algo_cfg = load_config(str(config_path))["Config"]
+        algo_cfg = load_config(str(config_path))
         logger.set_algorithm_config(algo_cfg)
 
     try:
-        # Build strongly-typed config directly (no key remapping)
-        ae_cfg = AEDecoderConfig(**algo_cfg)
 
-        # Slice time window using config (seconds)
-        fsamp = float(ae_cfg.sampling_frequency)
-        start_idx = int(round(ae_cfg.start_time * fsamp))
-        end_idx = int(round(ae_cfg.end_time * fsamp))
-        data = data[:, start_idx:end_idx].copy()
+        # Apply preprocessing steps
+        if "preProcessingConfig" in algo_cfg.keys():
+            pre_module = PreProcessEMG(steps=algo_cfg["preProcessingConfig"])
+            data, pre_meta = pre_module.pre_process(
+                data=data, fsamp=algo_cfg["sampling_frequency"]
+            )
+
+            for step in pre_meta["steps"]:
+                logger.add_processing_step(
+                    step_name=step["step"],
+                    details=step
+                )
+            
+            # Get the data segment relevant for decomposition
+            segmeted_data = _segment_data(
+                data, pre_meta["ch_mask"], pre_meta["sample_mask"]
+            )
+        else:
+            segmeted_data = data  
 
         # Run AE
-        ae = AEDecoder(ae_cfg)
-        sources, spikes, sil, mu_filters = ae.decompose(data, fsamp=fsamp)
+        model = AEDecoder(config=SimpleNamespace(**algo_cfg["algorithmConfig"]))
+        spikes, sources, scores = model.fit_predict(
+            sig=segmeted_data, fsamp=pre_meta["fsamp"]
+        )
 
+        # Apply post processing
+        if "postProcessingConfig" in algo_cfg.keys():
+            post_module = PostProcessSpikes(steps=algo_cfg["postProcessingConfig"])
+            spikes, sources, scores, post_meta = post_module.post_process(
+                spikes=spikes, 
+                fsamp=pre_meta["fsamp"], 
+                scores=scores, 
+                sources=sources
+            )
+
+            for step in post_meta["steps"]:
+                logger.add_processing_step(
+                    step_name=step["step"],
+                    details=step
+                )
+
+        # Prepare results
         results = {
-            "sources": sources,
-            "spikes": spikes,
-            "silhouette": sil,
-            "mu_filters": mu_filters,
+            "data": data,
+            "sources": sources, 
+            "spikes": spikes, 
+            "scores": scores
         }
+        if "preProcessingConfig" in algo_cfg.keys():
+            results["pre_process_meta"] = pre_meta
+        if "postProcessingConfig" in algo_cfg.keys():
+            results["post_process_meta"] = post_meta
 
         logger.set_return_code("ae_decomposer", 0)
         print("[INFO] AE decomposition completed successfully")
@@ -543,4 +578,4 @@ def decompose_ae(
         # Always finalize logger to ensure metadata is captured
         logger.finalize()
     
-    return results, logger.log_data
+    return results, logger.log_data, model
