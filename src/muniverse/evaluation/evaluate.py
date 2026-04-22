@@ -297,7 +297,7 @@ def label_sources(
             match_matrix[j, i] = match_score
 
             if match_score >= threshold:
-                labels[j] = i
+                labels[j] = labels[i]
 
     return labels, match_matrix
 
