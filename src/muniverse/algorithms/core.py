@@ -456,8 +456,9 @@ def whitening(
         method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
             Whitening method 
         backend : {"ed", "svd"}, default "ed" 
-            Method used to calculate eigenvalues and eigenvectors. Only needed 
-            if method is "ZCA" or "PCA".
+            Method used to calculate eigenvalues and eigenvectors. Can be
+            either based on singular value decomposition ("svd") or an
+            eigendecomposition ("ed"). Only needed if method is "ZCA" or "PCA".
         regularization : {"auto", float, None}, default "auto" 
             Adds a small value to the eigenvalues for regularization.
             If "auto", the mean of the second half of the eigenvalues is used.
@@ -810,7 +811,7 @@ def get_duplicates_mask(
         max_shift: float = 0.01,
         tol: float = 0.001,
         mask: np.ndarray | None = None
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Idendify duplicates spike trains and only keep for each 
     unique unit label the source with the best quality score
@@ -838,9 +839,11 @@ def get_duplicates_mask(
 
     Returns
     -------
-        keep_mask : np.ndarray (n_units,)
+        keep_mask : np.ndarray of bool (n_units,)
             Boolean mask of selected sources
             (True: keep source, False: reject source)
+        new_labels : np.ndarray of int (n_units,)
+            New label for each source   
 
 
     """
@@ -871,7 +874,7 @@ def get_duplicates_mask(
 
         keep_mask[best_idx] = True 
 
-    return keep_mask
+    return keep_mask, new_labels
 
 def get_bad_source_mask(
         spikes: pd.DataFrame,
