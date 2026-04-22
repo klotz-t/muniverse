@@ -19,16 +19,30 @@ import numpy as np
 import pandas as pd
 
 from ..utils.logging import AlgorithmLogger
-from .cbss import CBSS
-from .upperbound import UpperBound
+from .cbss import FastIcaCBSS
+from .upperbound import UpperBoundCBSS
 from .ae_decomposer import AEDecoder #, AEDecoderConfig
+from .pre_processing import PreProcessEMG
+from .post_processing import PostProcessSpikes
+from .core import map_spikes
 
 
 def load_config(config_path: str) -> Dict[str, Any]:
     """Load configuration from a JSON file."""
     with open(config_path, "r") as f:
         return json.load(f)
+    
+def _segment_data(data, ch_mask, sample_mask):
+    """Helper function to segment data """
 
+    segmented = data
+
+    if ch_mask is not None:
+        segmented = data[ch_mask, :]
+    if sample_mask is not None:    
+        segmented = segmented[:, sample_mask]
+
+    return segmented
 
 def decompose_scd(
     data: np.ndarray,
@@ -265,14 +279,14 @@ def decompose_upperbound(
         end_time = algo_cfg["end_time"] * algo_cfg["sampling_frequency"]
         data = data[:, start_time:end_time].copy()
         
-        ub = UpperBound(config=SimpleNamespace(**algo_cfg))
+        ub = UpperBoundCBSS(config=SimpleNamespace(**algo_cfg))
 
         # Validate muaps format
         if muaps.ndim != 3:
             raise ValueError("MUAPs must be a 3D array (n_motor_units x n_channels x duration)")
 
         # Run decomposition
-        sources, spikes, sil, mu_filters = ub.decompose(data, muaps, fsamp=fsamp)
+        sources, spikes, sil, mu_filters = ub.fit_predict(data, muaps, fsamp=fsamp)
 
         # Prepare results
         results = {
@@ -301,26 +315,40 @@ def decompose_cbss(
     data: np.ndarray,
     algorithm_config: Optional[Dict] = None,
     metadata: Optional[Dict] = None,
-) -> Tuple[Dict, Dict]:
+) -> Tuple[Dict, Dict, FastIcaCBSS]:
     """
     Run CBSS decomposition.
 
-    Args:
-        data: numpy array of EMG data (channels x samples)
-        algorithm_config: Optional path to algorithm configuration JSON file
-        metadata: Optional dictionary containing input data metadata for logging
+    Args
+    ----
+        data : np.ndarray 
+            EMG data (n_channels, n_samples)
+        algorithm_config : dict (Optional) 
+            Dictonary with the pipeline configuration
+        metadata: dict (Optional)
+            Optional dictionary containing input data metadata for logging
 
-    Returns:
-        Tuple containing:
-        - Dictionary with decomposition results containing:
-          * sources: Estimated sources
-          * spikes: Spike timing dictionary
-          * silhouette: Quality metrics
-        - Dictionary with processing metadata
+    Returns
+    -------
+        results : dict
+            Dictonary containing
+                - data (np.ndarray): Pre-processed data
+                - spikes (pd.DataFrame): Table of motor unit spikes
+                - sources (np.ndarray): Predicted sources
+                - scores (dict): Source quality metrics
+                - pre_process_metadata (dict): Metadata correspoding to
+                pre processing steps (Optional)
+                - post_process_metadata (dict): Metadata correspoding to
+                post processing steps (Optional)
+        log : dict
+            Dictonary of processing metadata        
+        model : FastIcaCBSS
+            The model used for decomposition
+
     """
     # Initialize logger
     logger = AlgorithmLogger()
-    logger.log_data["Pipeline"]["Name"] = "MUniverse-CBSS"
+    logger.log_data["Pipeline"]["Name"] = "MUniverse-CBSS-Pipeline"
     logger.log_data["Pipeline"]["Description"] = "Motor unit identification algorithm"
 
     # Set input data information
@@ -340,43 +368,101 @@ def decompose_cbss(
         logger.set_algorithm_config(algo_cfg)
     else:
         # Load default configuration
-        config_dir = Path(__file__).parent.parent.parent / "configs"
+        config_dir = Path(__file__).parent.parent.parent.parent / "configs"
         algorithm_config = config_dir / "cbss.json"
         if not algorithm_config.exists():
             raise FileNotFoundError(
                 f"Default CBSS config not found at {algorithm_config}"
             )
-        algo_cfg = load_config(algorithm_config)["Config"]
+        algo_cfg = load_config(algorithm_config)
         logger.set_algorithm_config(algo_cfg)
 
     try:
         # Apply start and end time to data
-        start_time = algo_cfg["start_time"] * algo_cfg["sampling_frequency"]
-        end_time = algo_cfg["end_time"] * algo_cfg["sampling_frequency"]
-        data = data[:, int(start_time):int(end_time)]
+        # start_time = algo_cfg["start_time"] * algo_cfg["sampling_frequency"]
+        # end_time = algo_cfg["end_time"] * algo_cfg["sampling_frequency"]
+        # data = data[:, int(start_time):int(end_time)]
+
+        
+        # Apply preprocessing steps
+        if "preProcessingConfig" in algo_cfg.keys():
+            pre_module = PreProcessEMG(steps=algo_cfg["preProcessingConfig"])
+            data, pre_meta = pre_module.pre_process(
+                data=data, fsamp=algo_cfg["sampling_frequency"]
+            )
+
+            for step in pre_meta["steps"]:
+                logger.add_processing_step(
+                    step_name=step["step"],
+                    details=step
+                )
+            
+            # Get the data segment relevant for decomposition
+            segmeted_data = _segment_data(
+                data, pre_meta["ch_mask"], pre_meta["sample_mask"]
+            )
+        else:
+            segmeted_data = data    
 
         # Initialize and run CBSS with config
-        cbss = CBSS(config=SimpleNamespace(**algo_cfg))
-        sources, spikes, sil, _ = cbss.decompose(
-            data, fsamp=algo_cfg["sampling_frequency"]
+        model = FastIcaCBSS(config=SimpleNamespace(**algo_cfg["algorithmConfig"]))
+        spikes, segmeted_sources, scores = model.fit_predict(
+            sig=segmeted_data, fsamp=pre_meta["fsamp"]
         )
 
-        # Prepare results
-        results = {"sources": sources, "spikes": spikes, "silhouette": sil}
+        logger.add_processing_step(
+            step_name="FastIcaCBSS",
+            details=algo_cfg["algorithmConfig"]
+        )
 
-        print(f"[INFO] CBSS decomposition completed successfully")
+        if "preProcessingConfig" in algo_cfg.keys():
+        # Map spikes and sources to gloabl time
+            sources = np.zeros((segmeted_sources.shape[0], data.shape[1]))
+            sources[:, pre_meta["sample_mask"]] = segmeted_sources
+            if pre_meta["t_start"] > 0:
+                spikes = map_spikes(spikes, pre_meta["fsamp"], pre_meta["t_start"])
+
+        # Apply post processing
+        if "postProcessingConfig" in algo_cfg.keys():
+            post_module = PostProcessSpikes(steps=algo_cfg["postProcessingConfig"])
+            spikes, sources, scores, post_meta = post_module.post_process(
+                spikes=spikes, 
+                fsamp=pre_meta["fsamp"], 
+                scores=scores, 
+                sources=sources
+            )
+
+            for step in post_meta["steps"]:
+                logger.add_processing_step(
+                    step_name=step["step"],
+                    details=step
+                )
+
+        # Prepare results
+        results = {
+            "data": data,
+            "sources": sources, 
+            "spikes": spikes, 
+            "scores": scores
+        }
+        if "preProcessingConfig" in algo_cfg.keys():
+            results["pre_process_meta"] = pre_meta
+        if "postProcessingConfig" in algo_cfg.keys():
+            results["post_process_meta"] = post_meta
+
+        print(f"[INFO] CBSS decomposition pipeline completed successfully")
         logger.set_return_code("cbss", 0)
 
     except Exception as e:
         print(f"[ERROR] CBSS decomposition failed: {str(e)}")
         logger.set_return_code("cbss", 1)
-        results = {"sources": None, "spikes": {}, "silhouette": None}
+        results = {"data": None, "sources": None, "spikes": None, "scores": None}
     
     finally:
         # Always finalize logger to ensure metadata is captured
         logger.finalize()
         
-    return results, logger.log_data
+    return results, logger.log_data, model
 
 def decompose_ae(
     data: np.ndarray,
