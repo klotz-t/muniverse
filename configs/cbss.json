@@ -48,7 +48,7 @@
         "peel_off_window": 0.025,
         "peel_off_sil_th": 0.9,
         "peel_off_cov_th": 0.35,
-        "verbose": false
+        "verbose": true
     },
 
     "postProcessingConfig": [

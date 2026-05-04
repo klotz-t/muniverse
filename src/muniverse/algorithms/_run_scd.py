@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Tuple
 import numpy as np
+import pickle
 
 try:
     import torch
@@ -24,27 +25,46 @@ except ImportError as e:
     print("This script is intended to run inside a container with SCD")
 
 # Prepare the rows
-def write_spike_tsv(dictionary, output_dir):
+def write_spike_tsv(dictionary, fsamp, output_dir):
     rows = []
+    duration = 0
+    desc = "motor-unit-spike"
     for unit_id, ts_tensor in enumerate(dictionary["timestamps"]):
         timestamps = ts_tensor.tolist()  # Convert tensor to list
         for ts in timestamps:
-            rows.append(f"{unit_id}\t{ts}")
+            onset = ts / fsamp
+            rows.append(f"{onset}\t{duration}\t{ts}\t{unit_id}\t{desc}")
+        
+    rows_sorted = sorted(rows, key=lambda r: float(r.split("\t")[0])) 
 
     # Write to TSV file
     with open(output_dir / "predicted_timestamps.tsv", "w") as f:
-        f.write("unit_id\ttimestamp\n")  # Write header
+        f.write("onest\tduration\tsample\tunit_id\tdescription\n")  # Write header
         for row in rows:
             f.write(f"{row}\n")
 
     return None
 
 def write_sources(dictionary, output_dir):
-    sources = np.hstack(dictionary["source"])
+    sources = np.hstack(dictionary["source"]).T
     np.savez_compressed(output_dir / "predicted_sources.npz", predicted_sources=sources)
 
     return None
 
+def write_scores(dictionary, output_dir):
+    try:
+        scores = {
+                "sil": torch.stack(
+                    dictionary["silhouettes"]).cpu().numpy().astype(float),
+                "cov_isi": torch.stack(
+                    dictionary["cov"]).cpu().numpy().astype(float) 
+            }
+    except:
+        scores = None   
+
+    np.savez_compressed(output_dir / "predicted_scores.npz", **scores)
+
+    return None
 
 def train(run_dir: str):
     """Run SCD decomposition on EMG data."""
@@ -54,10 +74,10 @@ def train(run_dir: str):
         alg_config = json.load(f)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    alg_config["Config"]["device"] = device
+    alg_config["device"] = device
 
     # Unpack config into Config dataclass
-    config = Config(**alg_config["Config"])
+    config = Config(**alg_config)
 
     # Set random seed
     seed = alg_config.get("Seed", 42)
@@ -88,8 +108,10 @@ def train(run_dir: str):
     # Save results to run directory
     run_path = Path(run_dir)
     
-    write_spike_tsv(dictionary, run_path)
+    write_spike_tsv(dictionary, alg_config["sampling_frequency"], run_path)
     write_sources(dictionary, run_path)
+    write_scores(dictionary, run_path)
+
     print(f"Saved results to {run_path}")
 
     return None
