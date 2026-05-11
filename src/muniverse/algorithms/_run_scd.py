@@ -66,6 +66,15 @@ def write_scores(dictionary, output_dir):
 
     return None
 
+def write_dict(dictionary, output_dir):
+    output_dir = Path(output_dir)
+    try:
+        with open(output_dir / "state.pkl", "wb") as f:
+            pickle.dump(dictionary, f)
+    except:
+        pass
+
+
 def train(run_dir: str):
     """Run SCD decomposition on EMG data."""
     # Load config from standardized location
@@ -96,10 +105,10 @@ def train(run_dir: str):
         device=config.device, dtype=torch.float32
     )
 
-    # Apply time window if specified
-    start_idx = int(config.start_time * config.sampling_frequency)
-    end_idx = int(config.end_time * config.sampling_frequency)
-    neural_data = neural_data[start_idx:end_idx, :]
+    # # Apply time window if specified
+    # start_idx = int(config.start_time * config.sampling_frequency)
+    # end_idx = int(config.end_time * config.sampling_frequency)
+    # neural_data = neural_data[start_idx:end_idx, :]
 
     # Initiate the model and run
     model = SwarmContrastiveDecomposition()
@@ -111,6 +120,7 @@ def train(run_dir: str):
     write_spike_tsv(dictionary, alg_config["sampling_frequency"], run_path)
     write_sources(dictionary, run_path)
     write_scores(dictionary, run_path)
+    write_dict(dictionary, run_dir)
 
     print(f"Saved results to {run_path}")
 
