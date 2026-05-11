@@ -6,15 +6,11 @@ import torch.nn.functional as F
 from typing import Literal, List, Union, Annotated
 # Reuse your existing utilities (same package structure as your CBSS snippet)
 from .core import (
-    bandpass_signals,
-    notch_signals,
     extension,
     whitening,
     est_spike_times,
     spike_dict_to_long_df,
-    # remove_duplicates,
-    # remove_bad_sources,
-    peel_off,
+    peel_off
 )
 
 # ----------------------------
@@ -215,12 +211,20 @@ class AEDecoder:
     Attributes
     ----------
         autoencoder_ : nn.Module
-            Class with the data model 
+            The learned autoencoder model 
+
         whiten_ : np.ndarray
             The whitening matrix
+
         unwhiten_ : np.ndarray
             The unwhietning matrix  
-        TODO Add some markers on algorithm progress      
+
+        unmixing_weights_ : np.ndarray (n_features, n_components)
+            The learned unmixing weights
+
+        epoch_loss_ : np.ndarray
+            Loss after each training iteration
+          
 
     
     References
@@ -309,7 +313,7 @@ class AEDecoder:
         # Convert config object (if provided) to a dictionary
         config_dict = vars(config) if config is not None else {}
 
-        self._params = set(self.__dict__.keys()) - {"_params"}
+        self._params = set(self.__dict__.keys()) - {"_params"} - {"_attributes"}
 
         # Assign all parameters as attributes
         for key, value in config_dict.items():
@@ -319,7 +323,8 @@ class AEDecoder:
                 print(f"Warning: ignoring invalid parameter: {key}")
 
         self._attributes = set([
-            "autoencoder_", "whiten_", "unwhiten_"
+            "autoencoder_", "whiten_", "unwhiten_",
+            "unmixing_weights_", "epoch_loss_"
         ]) 
 
 
@@ -427,6 +432,8 @@ class AEDecoder:
         )
         self.autoencoder_.train()
 
+        self.epoch_loss_ = np.zeros(self.epochs)
+
         # Loop ober data batches
         for epoch in range(self.epochs):
             epoch_loss = 0.0
@@ -447,8 +454,11 @@ class AEDecoder:
 
                 epoch_loss += loss.item()
                 nb += 1
+
+            self.epoch_loss_[epoch] = epoch_loss / max(1,nb)    
             # (Optional) print training progress
-            # print(f"[AE] epoch {epoch+1}/{self.cfg.epochs}  loss={epoch_loss/max(1,nb):.5f}")
+            if self.verbose:
+                print(f"[AE] epoch {epoch+1}/{self.epochs}  loss={epoch_loss/max(1,nb):.5f}")
 
     def _postprocess(
             self, 
@@ -551,6 +561,7 @@ class AEDecoder:
         # Build and train autoencoder
         self._init_autoencoder(n_features=Xw.shape[0])
         self._train_autoencoder(Xw_torch.T)
+        self.unmixing_weights_ = self.autoencoder_.encoder.W.detach().numpy()
 
     def fit_predict(
             self, 
@@ -562,6 +573,7 @@ class AEDecoder:
         ----
             sig : np.ndarray 
                 EMG data (n_channels, n_samples)
+
             fsamp: float 
                 sampling frequency (Hz)
 
@@ -569,8 +581,10 @@ class AEDecoder:
         -------
             spikes : pd.DataFrame 
                 Spike table (columns: onset, duration, sample, unit_id, description)
+
             sources : np.ndarray 
                 Estimated latents / sources (n_components x n_samples)
+
             scores : dict of np.ndarray 
                 Source trustworthiness scores ("sil" and "cov_isi")
 
@@ -588,6 +602,7 @@ class AEDecoder:
         # Build and train autoencoder
         self._init_autoencoder(n_features=Xw.shape[0])
         self._train_autoencoder(Xw_torch.T)
+        self.unmixing_weights_ = self.autoencoder_.encoder.W.detach().numpy()
 
         # Predict latent sources for the given data
         with torch.no_grad():
@@ -675,7 +690,7 @@ class AEDecoder:
             "attributes": attributes
         }
     
-    def load_model(self, model):
+    def load_model(self, model, device="cpu"):
         """"
         Load a model including both parameters and learned 
         attributes for downstream usage
@@ -685,8 +700,15 @@ class AEDecoder:
             model : dict
                 Dictonary containing all parameters and learned 
                 attributes of the model 
+
+            device : str , default "cpu"
+                Device on which torch tensors will be allocated
+
         
         """
+
+        if isinstance(device, str):
+            device = torch.device(device) 
 
         for key, value in model["parameters"].items():
             if key in self._params:
@@ -699,6 +721,9 @@ class AEDecoder:
                     self.autoencoder_.load_state_dict(
                         model["attributes"][key]
                     )
+                    self.autoencoder_.to(device)
                 else:
                     setattr(self, key, value)
+
+        self.device = device            
     
