@@ -471,11 +471,9 @@ class AEDecoder:
         spikes = {i: [] for i in range(n_mu)}
 
         scores = {
-            "sil": np.zeros(n_mu),
-            "cov_isi": np.zeros(n_mu),
+            "sil": np.zeros(n_mu) * np.nan,
+            "cov_isi": np.zeros(n_mu) * np.nan,
         }
-
-        
 
         # Spike detection on each latent 
         for i in range(n_mu):

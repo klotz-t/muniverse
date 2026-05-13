@@ -513,9 +513,9 @@ class FastIcaCBSS(_BaseCBSS):
         sources = np.zeros((self.ica_iterations, sig.shape[1]))
         spikes = {i: [] for i in range(self.ica_iterations)}
         scores = {
-            "sil": np.zeros(self.ica_iterations),
-            "cov_isi": np.zeros(self.ica_iterations),
-            "ica_target": np.zeros(self.ica_iterations)
+            "sil": np.zeros(self.ica_iterations) * np.nan,
+            "cov_isi": np.zeros(self.ica_iterations) * np.nan,
+            "ica_target": np.zeros(self.ica_iterations) * np.nan
         }
         self.n_fixed_point_iter_ = np.zeros(self.ica_iterations, dtype=int)
         self.fixed_point_deltas_ = {i: [] for i in range(self.ica_iterations)}
