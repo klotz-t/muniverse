@@ -23,117 +23,115 @@ class PreProcessEMG:
         List of preprocessing steps. Each step is a dictionary describing
         the processing operation.
 
-        Supported step types are:
-        "bandpass", "highpass", "lowpass", "notch",
-        "bad_channel_detection", "mask_channels", "downsample":
+    Processing Steps
+    ----------------    
+    **Bandpass filter**: Bandpass filter time series data using a digital
+    infinite impulse response filter ("butter") or finite impulse response
+    filter ("firwin2")::
 
-        **Bandpass filter**: Bandpass filter time series data using a digital
-        infinite impulse response filter ("butter") or finite impulse response
-        filter ("firwin2")::
+        {
+            "step": "bandpass",
+            "high_pass": float,
+            "low_pass": float,
+            "method": "butter" | "firwin2",
+            "order": int,      # required if method == "butter"
+            "numtabs": int,    # required if method == "firwin2"
+        }
 
-            {
-                "step": "bandpass",
-                "high_pass": float,
-                "low_pass": float,
-                "method": "butter" | "firwin2",
-                "order": int,      # required if method == "butter"
-                "numtabs": int,    # required if method == "firwin2"
-            }
+    **Highpass filter**: Highpass filter time series data using a digital
+    infinite impulse response filter ("butter") or finite impulse response
+    filter ("firwin2")::
 
-        **Highpass filter**: Highpass filter time series data using a digital
-        infinite impulse response filter ("butter") or finite impulse response
-        filter ("firwin2")::
+        {
+            "step": "highpass",
+            "high_pass": float,
+            "method": "butter" | "firwin2",
+            "order": int, # required if method == "butter"
+            "numtabs": int, # required if method == "firwin2"
+        }
 
-            {
-                "step": "highpass",
-                "high_pass": float,
-                "method": "butter" | "firwin2",
-                "order": int, # required if method == "butter"
-                "numtabs": int, # required if method == "firwin2"
-            }
+    **Lowpass filter**: Lowpass filter time series data using a digital
+    infinite impulse response filter ("butter") or finite impulse response
+    filter ("firwin2")::
 
-        **Lowpass filter**: Lowpass filter time series data using a digital
-        infinite impulse response filter ("butter") or finite impulse response
-        filter ("firwin2")::
+        {
+            "step": "lowpass",
+            "low_pass": float,
+            "method": "butter" | "firwin2",
+            "order": int, # required if method == "butter"
+            "numtabs": int, # required if method == "firwin2"
+        }
 
-            {
-                "step": "lowpass",
-                "low_pass": float,
-                "method": "butter" | "firwin2",
-                "order": int, # required if method == "butter"
-                "numtabs": int, # required if method == "firwin2"
-            }
+    **Notch filter**:: Apply a digital notch (stop band) filter using either a
+    infinite impulse response filter ("butter"), a finite impulse response 
+    filter ("iirnotch") or performing filtering in the frequency domain 
+    ("fft_nulling" and "fft_interpolation"). For "fft_nulling" the spectrum in
+    the specified frequency band is set to zero, for "fft_interpolation" the 
+    spectral amplitude is interpolated through by the neighbourhood. Time series
+    data is recovered through an inverse fft::
 
-        **Notch filter**:: Apply a digital notch (stop band) filter using either a
-        infinite impulse response filter ("butter"), a finite impulse response 
-        filter ("iirnotch") or performing filtering in the frequency domain 
-        ("fft_nulling" and "fft_interpolation"). For "fft_nulling" the spectrum in
-        the specified frequency band is set to zero, for "fft_interpolation" the 
-        spectral amplitude is interpolated through by the neighbourhood. Time series
-        data is recovered through an inverse fft.
+        {
+            "step": "notch",
+            "freqs": list[float],
+            "method": "butter" | "iirnotch" | "fft_nulling" | "fft_interpolation",
+            "order": int,   # if "butter"
+            "dfreq": float  # if "iirnotch", "fft_nulling" or "fft_interpolation"
+        }
 
-            {
-                "step": "notch",
-                "freqs": list[float],
-                "method": "butter" | "iirnotch" | "fft_nulling" | "fft_interpolation",
-                "order": int,   # if "butter"
-                "dfreq": float  # if "iirnotch", "fft_nulling" or "fft_interpolation"
-            }
+    **Bad Channel Detection**: Automatically detect bad channels based on some 
+    metric ("std" or "rms") computed in a given time window (given in seconds). 
+    If method is "zscore" the score distribution is normalized (zero mean, 
+    unit standard deviation). All scores are compared to a "threshold_value". 
+    If mode is "above" all values above the threshold are rejected, if mode is "below" 
+    all values below the theshold are rejected. For mode="two-sided" the absolute value 
+    of the score is computed and all values above the threshold are rejected 
+    (only availible if "method" == "zscore")::  
 
-        **Bad Channel Detection**: Automatically detect bad channels based on some 
-        metric ("std" or "rms") computed in a given time window (given in seconds). 
-        If method is "zscore" the score distribution is normalized (zero mean, 
-        unit standard deviation). All scores are compared to a "threshold_value". 
-        If mode is "above" all values above the threshold are rejected, if mode is "below" 
-        all values below the theshold are rejected. For mode="two-sided" the absolute value 
-        of the score is computed and all values above the threshold are rejected 
-        (only availible if "method" == "zscore")::  
+        {
+            "step": "bad_channel_detection",
+            "metric": Literal["std", "rms", "medfreq", "medpower"],
+            "window": (t0, t1) | None, # Given in seconds, if None consider the full data
+            "method": "zscore" | "threshold",
+            "max_iter": int, # Needed if method is zscore
+            "threshold_value": float,
+            "mode": "below" | "above" | "two-sided",
+            "bandwidth": (f0, f1) | None, # Bandwidth considered for freqeuncy-based metrics
+            "description": str
+        } 
 
-            {
-                "step": "bad_channel_detection",
-                "metric": Literal["std", "rms", "medfreq", "medpower"],
-                "window": (t0, t1) | None, # Given in seconds, if None consider the full data
-                "method": "zscore" | "threshold",
-                "max_iter": int, # Needed if method is zscore
-                "threshold_value": float,
-                "mode": "below" | "above" | "two-sided",
-                "bandwidth": (f0, f1) | None, # Bandwidth considered for freqeuncy-based metrics
-                "description": str
-            } 
+    **Mask Channels**: Mask all channels given in "channel_list" to be excluded in the following. 
+    Can be either used to reject known bad channels or limit the analysis to a subset of your data::  
 
-        **Mask Channels**: Mask all channels given in "channel_list" to be excluded in the following. 
-        Can be either used to reject known bad channels or limit the analysis to a subset of your data::  
+        {
+            "step": "mask_channels",
+            "channel_list": list[int],
+            "description": str
+        }
 
-            {
-                "step": "mask_channels",
-                "channel_list": list[int],
-                "description": str
-            }
+    **Downsample**: Reduces the sampling frequency by the specified value::  
 
-        **Downsample**: Reduces the sampling frequency by the specified value::  
+        {
+            "step": "downsample",
+            "factor": int 
+        }
 
-            {
-                "step": "downsample",
-                "factor": int 
-            }
+    **Time window**: Truncate your signal to only consider a selected time window.
+    If t_end = -1 the time window ends with the last sample::  
 
-        **Time window**: Truncate your signal to only consider a selected time window.
-        If t_end = -1 the time window ends with the last sample::  
+        {
+            "step": "time_window",
+            "t_start": float,
+            "t_end": float 
+        }    
 
-            {
-                "step": "time_window",
-                "t_start": float,
-                "t_end": float 
-            }    
+    **Get metric**: Calculate for each channel the specified metric in the given 
+    time window. 
 
-        **Get metric**: Calculate for each channel the specified metric in the given 
-        time window. 
-
-            {
-                "step": "get_metric",
-                "metric": Literal["std", "rms", "medfreq", "medpower"],
-                "window": (t0, t1) | None, # Given in seconds, if None consider the full data
-            } 
+        {
+            "step": "get_metric",
+            "metric": Literal["std", "rms", "medfreq", "medpower"],
+            "window": (t0, t1) | None, # Given in seconds, if None consider the full data
+        } 
 
     Examples:
     ---------
