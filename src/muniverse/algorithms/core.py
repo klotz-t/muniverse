@@ -758,7 +758,15 @@ def spike_dict_to_long_df(
         fsamp: float = 2048
 ) -> pd.DataFrame:
     """
-    Convert a dictionary of spike instances into a long-formatted DataFrame.
+    Convert a dictionary of spike instances into a long-formatted 
+    spike table. The table follows BIDS-events files and has
+    the columns: 
+    - "onset": Time of the event in seconds
+    - "duration": Duration of the event (0 for neural spikes) 
+    - "sample": Sample indice of the event  
+    - "unit_id": Unique unit ID (integer)
+    - "description": Free-text event description
+
 
     Args
     ----
@@ -770,7 +778,7 @@ def spike_dict_to_long_df(
     Returns
     -------
         df : pd.DataFrame 
-            Long-formatted spike table (BIDS-events style)
+            Table of motor unit spikes
     """
 
     columns = ["onset", "duration", "sample", "unit_id", "description"]
@@ -804,7 +812,7 @@ def get_duplicates_mask(
         spikes: pd.DataFrame,
         scores: np.ndarray, 
         fsamp: float, 
-        mode: Literal["max", "min"] = "max",
+        mode: Literal["max", "min", "first"] = "max",
         t_start: float = 0, 
         t_end: float = -1,
         duplicate_theshold: float = 0.3,
@@ -820,28 +828,34 @@ def get_duplicates_mask(
     ----
         spikes : pd.DataFrame
             Long-table dictonary of spikes
+
         scores : np.ndarray 
             Array of quality metrics
+
         fsamp : float 
             Sampling rate in Hz
-        mode : {"max", "min"} , default "max"         
-            Weather to keep the source with the maximal
-            or minimal score
+
+        mode : {"max", "min", "first"} , default "max"         
+            Whether to keep the source with the maximal score ("max"),
+            the minimal score ("min"), or the first copy ("first").
+
         duplicate_theshold : float , default 0.3
             Minimum fraction of common spikes to classify 
             two units identical       
+
         max_shift : float , default 0.01
             Maximal delay between two spike trains in seconds
+
         tol : float , default 0.001
             All spikes with a delay lower than the given tolerance 
             (in seconds) are classified identical
-
 
     Returns
     -------
         keep_mask : np.ndarray of bool (n_units,)
             Boolean mask of selected sources
             (True: keep source, False: reject source)
+
         new_labels : np.ndarray of int (n_units,)
             New label for each source   
 
@@ -866,11 +880,13 @@ def get_duplicates_mask(
     for label in unique_labels:
         idx = np.where(new_labels == label)[0]
 
-        # pick best according to score
+        # pick best according to score (or keep the first element)
         if mode == "max":
             best_idx = idx[np.argmax(scores[idx])]
         elif mode == "min":
             best_idx = idx[np.argmin(scores[idx])]
+        else:
+            best_idx = idx[0] # mode == "first"
 
         keep_mask[best_idx] = True 
 
