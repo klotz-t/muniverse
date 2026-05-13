@@ -669,11 +669,12 @@ class PostProcessCBSS(_BaseCBSS, PostProcessSpikes):
 
         for i in range(n_units):
 
-            if ~mask[i]:
-                continue
-
             local_spikes = spikes[
                 spikes["unit_id"] == units[i]]["sample"].values
+            
+            if ~mask[i]:
+                new_spikes[i] = local_spikes
+                continue
 
             w, new_spikes[i], sil = self._optimze_delay(
                 X = white_sig,
