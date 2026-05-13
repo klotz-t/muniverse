@@ -723,14 +723,18 @@ def _run_scd_local(data, cfg):
             i: dictionary["timestamps"][i].tolist() for i in range(n_units)}
         spikes = spike_dict_to_long_df(spike_dict, fsamp)
 
-        sources = np.hstack(dictionary["source"]).T
+        if n_units > 0:
+            sources = np.hstack(dictionary["source"]).T
 
-        scores = {
-            "sil": torch.stack(
-                dictionary["silhouettes"]).cpu().numpy().astype(float),
-            "cov_isi": torch.stack(
-                dictionary["cov"]).cpu().numpy().astype(float) 
-        }
+            scores = {
+                "sil": torch.stack(
+                    dictionary["silhouettes"]).cpu().numpy().astype(float),
+                "cov_isi": torch.stack(
+                    dictionary["cov"]).cpu().numpy().astype(float) 
+            }
+        else:
+            sources = None
+            scores = None
 
         return_code = {
                 "name": "scd", 
