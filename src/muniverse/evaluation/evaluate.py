@@ -535,7 +535,7 @@ def evaluate_spike_matches(
     df1: pd.DataFrame,
     df2: pd.DataFrame,
     t_start: float = 0,
-    t_end: float = 60,
+    t_end: float = -1,
     tol: float = 0.001,
     max_shift: float = 0.1,
     fsamp: float = 2048,
@@ -587,6 +587,12 @@ def evaluate_spike_matches(
             Table of matched units
 
     """
+
+    if t_end == -1:
+        t_end = max(
+                df1["onset"].max(), df2["onset"].max()
+            )  + 0.1
+
     source_labels_1 = sorted(df1["unit_id"].unique())
     source_labels_2 = sorted(df2["unit_id"].unique())
 
