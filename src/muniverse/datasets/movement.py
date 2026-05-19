@@ -85,10 +85,11 @@ def _compute_movement_duration(params: Dict) -> float:
     ramp_duration = params.get("RampDuration")
     hold_duration = params.get("HoldDuration")
     n_reps = params.get("NRepetitions", 1)
+    # Each cycle has a leading AND trailing rest segment, so rest contributes 2x.
     if params.get("EffortProfile") == "Ballistic":
-        return n_reps * (rest_duration + ramp_duration)
+        return n_reps * (2 * rest_duration + ramp_duration)
     else:
-        return (rest_duration + 2*ramp_duration + hold_duration) * n_reps
+        return (2 * rest_duration + 2 * ramp_duration + hold_duration) * n_reps
 
 
 def _create_effort_profile(params: Dict, samples: int, fs: float) -> np.ndarray:
@@ -110,7 +111,7 @@ def _create_effort_profile(params: Dict, samples: int, fs: float) -> np.ndarray:
         return _trapezoid_profile(rest_duration, ramp_duration, hold_duration, target_effort, n_reps, samples, fs)
     elif profile_type == "Triangular":
         ramp_duration = params.get("RampDuration")
-        return _triangular_profile(rest_duration, ramp_duration, target_effort, n_reps, samples, fs)
+        return _triangular_profile(rest_duration, ramp_duration, n_reps, target_effort, samples, fs)
     elif profile_type == "Sinusoid":
         sin_frequency = params.get("SinFrequency")
         initial_effort = params.get("InitialEffort") / 100.0
