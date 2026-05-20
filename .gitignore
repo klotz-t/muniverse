@@ -65,3 +65,6 @@ data/
 **/res/
 **/configs/
 **/outputs/
+
+# Test coverage <temporarily?>
+.coverage

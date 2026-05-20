@@ -102,7 +102,7 @@ def generate_synthetic_recording(
         output_dir = os.path.abspath(output_dir)
         np.savez(os.path.join(output_dir, "emg_data.npz"), **results)
         print(f"[INFO] Data saved to {output_dir}")
-    
+
     return results
 
 

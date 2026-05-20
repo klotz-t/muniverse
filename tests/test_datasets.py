@@ -109,6 +109,7 @@ def test_new_generate_synthetic_recording_structure(engine, container, short_con
         engine=engine,
         container=container,
         cache_dir=None,
+        verbose=True
     )
 
     expected_keys = {"emg", "spikes", "effort_profile", "angle_profile", "muaps", "muap_angle_labels"}
