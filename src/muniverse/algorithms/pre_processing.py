@@ -307,18 +307,18 @@ class PreProcessEMG:
         elif metric == "std":
             score = np.std(data, axis=1)
         elif metric == "medfreq":
-            psd, freqs = welch(data, fs=fsamp, nperseg=fsamp, noverlap=fsamp/2)
+            freqs, psd = welch(data, fs=fsamp, nperseg=fsamp, noverlap=fsamp/2)
             idx = np.where((freqs > bw[0]) & (freqs < bw[1]))[0]
             cumulative = np.cumsum(psd[:, idx], axis=1)
             total = cumulative[:, -1][:, None]
             med_idx = np.argmax(cumulative >= total / 2, axis=1)
             score = freqs[med_idx]
         elif metric == "medpower":
-            psd, freqs = welch(data, fs=fsamp, nperseg=fsamp, noverlap=fsamp/2)
+            freqs, psd = welch(data, fs=fsamp, nperseg=fsamp, noverlap=fsamp/2)
             idx = np.where((freqs > bw[0]) & (freqs < bw[1]))[0]
             score = np.median(psd[:,idx], axis=1)
         elif metric == "cumpower":
-            psd, freqs = welch(data, fs=fsamp, nperseg=fsamp, noverlap=fsamp/2)
+            freqs, psd = welch(data, fs=fsamp, nperseg=fsamp, noverlap=fsamp/2)
             idx = np.where((freqs > bw[0]) & (freqs < bw[1]))[0]
             score = np.sum(psd[:,idx], axis=1)
         else:
@@ -379,7 +379,7 @@ class PreProcessEMG:
                 mask = score < threshold_value
             else:
                 raise ValueError(
-                    f"For method '{method}' tail must be 'above' or 'below'."
+                    f"For method '{method}' mode must be 'above' or 'below'."
                 )
         else:
             raise ValueError(
@@ -483,8 +483,8 @@ class PreProcessEMG:
                     ] = step.description
                 elif isinstance(step, self.BadChannelDetection):
                     if step.window is not None:
-                        idx0 = int(step.window[0] / fsamp_new)
-                        idx1 = int(step.window[1] / fsamp_new)
+                        idx0 = int(step.window[0] * fsamp_new)
+                        idx1 = int(step.window[1] * fsamp_new)
                     else:
                         idx0 = 0
                         idx1 = data.shape[1]
@@ -495,7 +495,7 @@ class PreProcessEMG:
                         method=step.method,
                         threshold_value=step.threshold_value,
                         max_iter=step.max_iter,
-                        tail=step.tail
+                        mode=step.mode
                     )
                     ch_mask = ch_mask & ~bad_mask
                     ch_status.loc[bad_mask, "status"] = "off"
