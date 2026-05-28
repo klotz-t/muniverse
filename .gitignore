@@ -21,6 +21,8 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+.muniverse/
+.claude/
 
 # Virtual Environment
 .env
