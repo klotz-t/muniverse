@@ -11,6 +11,7 @@ import warnings
 import subprocess
 import shutil
 from pathlib import Path
+from typing import List, Literal, Optional
 
 import numpy as np
 import pandas as pd
@@ -399,7 +400,7 @@ class BIDSDataset:
                 List of all warnings
 
             valid : bool 
-                True if there are no errors
+                Returns True if there are no errors
         
         """
 
@@ -427,16 +428,110 @@ class BIDSDataset:
 
 class EMGBIDSRecording(BIDSDataset):
     """
-    Class for handling EMG recordings in BIDS format.
+    Class for handling data and metadata files from EMG-BIDS dataset.
 
-    This class implements the BIDS standard for EMG data, including support for root, subject
-    or session-level inheritance of metadata files. By default, all metadata files are linked
-    to their respective recording files. However, certain metadata files can be inherited
-    at the session level to avoid duplication.
+    Attributes
+    ----------
+
+        root : str
+            The root folder of a BIDS dataset
+
+        datasetname : str
+            The name of a BIDS dataset
+
+        readme : str
+            The README file of a BIDS dataset stored as a string    
+
+        dataset_sidecar : dict
+            Dictonary capturing the content of a *_dataset.json file  
+
+        subjects_data : pd.DataFrame
+            Table with subject information and pre-defined columns 
+            "participant_id", "age", "sex", "handedness", "weight" and "height"
+
+        subjects_sidecar : dict 
+            Dictonary capturing the content of a *_subjects.json file
+
+        datapath : str
+            Folder where the recording file is/will be stored
+
+        subject_label : str , default "01"
+            Label of the subject the recording belongs to
+
+        session_label : str or None , default None
+            Label of the session the recording belongs to   
+
+        task_label : str , default "taskName"
+            Label of the task perfomed in this recording 
+
+        acq_label : str or None , default None
+            Label distnguish multiple aquisition modes 
+
+        run_label : str or None , default "01"
+            Label to distnguish multiple repetitions of the same task  
+
+        recording_label : str or None , default None 
+            Label to distnguish data files from different aquisition systems     
+
+        datatype : str , default "emg"
+            Type of data (for now always EMG) 
+
+        data : np.ndarray
+            Data matrx (n_channels, n_samples)     
+
+        fileformat : {"edf", "bdf"} , default "edf"
+            File format used to store the data matrix 
+
+        emg_sidecar : dict
+            Dictonary corresponding to the "_emg.json" file    
+
+        channels : pd.DataFrame
+            Table with channel-specific metadata
+
+        channels_sidecar : dict
+            Dictonary corresponding to the "_channels.json" file        
+
+        electrodes : pd.DataFrame
+            Table with electrode-specific metadata   
+
+        electrodes_sidecar : dict
+            Dictonary corresponding to the "_electrodes.json" file   
+
+        coord_sidecar : dict of dict
+            Dictonary of dictonaries, whereby each key corresponds 
+            to one coordinate system  
+
+        events : pd.DataFrame
+            Table of events describing the experiment. Must contain
+            the columns "onset" and "duration"
+
+        events_sidecar : dict     
+            Dictonary corresponding to the "_events.json" file      
+
+        inherited_metadata : dict    
+            Dictonary of inherited metadata files
+
+        inherited_levels : dict    
+            Dictonary with the levels of the inherited metadata files          
+
+        BIDSIGNORE : list of str , default []
+            List of ignored files
+
+
+    References
+    ----------
+    - https://bids-specification.readthedocs.io/en/stable/modality-specific-files/electromyography.html
+
+
+    Notes
+    -----
+    By default, all metadata files are linked to their respective recording files. 
+    However, certain metadata files can be inherited at the root, session or 
+    subject-level to avoid duplication.
 
     Inheritance Rules:
     - By default, no metadata files are inherited (all are linked to _emg.edf)
-    - emg.json, channels.tsv, electrodes.tsv and coordsystem.json can be inherited at dataset, subject or session level
+    - electrodes.tsv and coordsystem.json can be inherited at dataset, subject or session level
     - Inherited files are stored at dataset, subject session level with names like:
       -> root/dataset/electrodes.tsv
       -> root/dataset/sub-01/sub-01_electrodes.tsv
@@ -446,45 +541,45 @@ class EMGBIDSRecording(BIDSDataset):
     """
 
     # Define valid metadata files that can be inherited and valid inheritance levels
-    INHERITABLE_FILES = [
+    _INHERITABLE_FILES = [
         "electrodes.tsv", "electrodes.json", 
         "coordsystem.json", "events.tsv", "events.json"
     ]
-    INHERITABLE_LEVELS = ["dataset" , "task", "subject", "session"]
+    _INHERITABLE_LEVELS = ["dataset" , "task", "subject", "session"]
     # Define permissible raw data formats
-    FILE_FORMATS = ["edf", "edf+", "bdf", "bdf+"]
+    _FILE_FORMATS = ["edf", "edf+", "bdf", "bdf+"]
     # Predefined fields in tabular columns
-    CHANNELS_FIELDS = [
+    _CHANNELS_FIELDS = [
         "name", "type", "units", "description", "sampling_frequency",
         "signal_electrode", "reference", "group", "target_muscle",
         "placement_scheme", "placement_description", "interelectrode_distance", 
         "low_cutoff", "high_cutoff", "notch", "status", "status_description"
     ]
-    ELECTRODES_FIELDS = [
+    _ELECTRODES_FIELDS = [
         "name", "x", "y", "z", "coordinate_system", "type",
         "material", "impedance", "group"
     ]
-    EVENTS_FIELDS = ["onset", "duration"]
+    _EVENTS_FIELDS = ["onset", "duration"]
 
     def __init__(
         self,
-        subject_label="01",
-        session_label=None,
-        task_label="taskDescription",
-        acq_label = None,
-        run_label="01",
-        recording_label=None,
-        datatype="emg",
-        path="./",
-        datasetname="datasetName",
-        fileformat="edf",
-        fsamp=2048,
-        plfreq=50,
-        overwrite=False,
-        inherited_metadata=None,
-        inherited_level=None,
-        parent_dataset=None
+        subject_label: str = "01",
+        session_label: str | None =None,
+        task_label: str = "taskName",
+        acq_label: str | None = None,
+        run_label: str | None = "01",
+        recording_label: str | None = None,
+        datatype: Literal["emg"] = "emg",
+        path: str = "./",
+        datasetname: str = "datasetName",
+        fileformat: Literal["edf", "bdf"] = "edf",
+        fsamp: float = 2048,
+        plfreq: float = 50,
+        inherited_metadata: list | None =None,
+        inherited_level: list | None = None,
+        parent_dataset: BIDSDataset | None = None
     ):
+        """Init EMGBIDSRecording class"""
 
         super().__init__(
             datasetname=datasetname,
@@ -498,7 +593,8 @@ class EMGBIDSRecording(BIDSDataset):
 
         # Check if the function arguments are valid
         self._validate_arguments(
-            subject_label, session_label, task_label,  acq_label, run_label, recording_label, datatype
+            subject_label, session_label, task_label,  acq_label, 
+            run_label, recording_label, datatype
         )
 
         # Get the datapath
@@ -516,10 +612,9 @@ class EMGBIDSRecording(BIDSDataset):
         self.run_label = run_label
         self.recording_label = recording_label
         self.datatype = datatype
-        #self.emg_data = Edf([EdfSignal(np.zeros(1), sampling_frequency=1)])
         self.fsamp = fsamp
-        self.emg_data = np.empty((0,))
-        if fileformat in self.FILE_FORMATS:
+        self.data = np.empty((0,))
+        if fileformat in self._FILE_FORMATS:
             self.fileformat = fileformat
         else:
             raise ValueError(f"Invalid fileformat: {fileformat}")
@@ -554,34 +649,36 @@ class EMGBIDSRecording(BIDSDataset):
         """
         Set which metadata files should be inherited at session level.
 
-        Parameters:
-        -----------
+        Args
+        ----
         metadata_files : list of str
-            - List of metadata file names to inherit. Must be from INHERITABLE_FILES.
+            List of metadata file names to inherit. Must be from _INHERITABLE_FILES.
             Example: ['electrodes', 'coordsystem']
+
         inherited_level: list of str 
-            - Level of the inherited metadata. Must be from INHERITABLE_LEVELS
+            Level of the inherited metadata. Must be from _INHERITABLE_LEVELS
             Examples: ['session', 'subject'] or ['dataset', 'dataset]
 
-        Notes:
-        ------
-        - Only emg.sjon, channels.tsv, electrodes.tsv and coordsystem.json can be inherited
+        Notes
+        -----
+        - Only "_emg.json", "_channels.tsv", "_electrodes.tsv" and "_coordsystem.json" can be inherited
         - Inherited files are stored at dataset, subject of session level
         - Non-inherited files are stored with their respective recording files
+
         """
         # Validate input
-        invalid_files = [f for f in metadata_files if f not in self.INHERITABLE_FILES]
+        invalid_files = [f for f in metadata_files if f not in self._INHERITABLE_FILES]
         if invalid_files:
             raise ValueError(
                 f"Invalid metadata files for inheritance: {invalid_files}. "
-                f"Valid options are: {self.INHERITABLE_FILES}"
+                f"Valid options are: {self._INHERITABLE_FILES}"
             )
         
-        invalid_levels = [f for f in inherited_level if f not in self.INHERITABLE_LEVELS]
+        invalid_levels = [f for f in inherited_level if f not in self._INHERITABLE_LEVELS]
         if invalid_levels:
             raise ValueError(
                 f"Invalid metadata files for inheritance: {invalid_levels}. "
-                f"Valid options are: {self.INHERITABLE_LEVELS}"
+                f"Valid options are: {self._INHERITABLE_LEVELS}"
             )
         
         if len(inherited_level) != len(metadata_files):
@@ -813,20 +910,19 @@ class EMGBIDSRecording(BIDSDataset):
                 with open(filename, "w") as f:
                     json.dump(self.electrodes_sidecar, f, indent=4)        
 
-        if self.emg_data.size > 0:
+        if self.data.size > 0:
             filename = self._get_bids_filename(f"emg.{self.fileformat}")
-            #self.emg_data.write(filename)
-            if self.emg_data.shape[0] != len(self.channels):
-                channel_names = [f"Ch{i}" for i in range(self.emg_data.shape[0])]
+            if self.data.shape[0] != len(self.channels):
+                channel_names = [f"Ch{i}" for i in range(self.data.shape[0])]
             else:
                 channel_names = self.channels["name"].values.tolist()
             signal_headers = make_signal_headers(
                 channel_names, 
                 sample_frequency=self.fsamp
             )
-            write_edf(filename, self.emg_data, signal_headers)
+            write_edf(filename, self.data, signal_headers)
         else:
-            warnings.warn("Your emg_data field is empty.")
+            warnings.warn("Your data field is empty.")
 
         # Write events.tsv and sidecar
         if len(self.events) > 0:
@@ -873,7 +969,7 @@ class EMGBIDSRecording(BIDSDataset):
         if os.path.isfile(filename):
             with open(filename, "r") as f:
                 self.electrodes_sidecar = json.load(f)
-        elif not set(self.electrodes.columns).issubset(self.ELECTRODES_FIELDS):
+        elif not set(self.electrodes.columns).issubset(self._ELECTRODES_FIELDS):
             filename = self._find_inherited_file("electrodes.json")
             filename = filename[0] if filename else str()
             if os.path.isfile(filename):
@@ -898,8 +994,7 @@ class EMGBIDSRecording(BIDSDataset):
 
         filename = self._get_bids_filename(f"emg.{self.fileformat}")
         if os.path.isfile(filename):
-            #self.emg_data = read_edf(filename)
-            self.emg_data, _ , _ = read_edf(filename)
+            self.data, _ , _ = read_edf(filename)
 
         # Read events .tsv
         filename = self._get_bids_filename("events.tsv")
@@ -930,7 +1025,7 @@ class EMGBIDSRecording(BIDSDataset):
             # Drop duplicates
             self.channels = self.channels.drop_duplicates(subset="name", keep="last")
             for col in self.channels.columns:
-                if (col not in self.CHANNELS_FIELDS and col not in self.channels_sidecar):
+                if (col not in self._CHANNELS_FIELDS and col not in self.channels_sidecar):
                     warnings.warn(
                         f"Field {col} needs to be defined in channels_sidecar."
                     )
@@ -944,7 +1039,7 @@ class EMGBIDSRecording(BIDSDataset):
                 col = self.electrodes.pop("z")
                 self.electrodes.insert(3, "z", col)
             for col in self.electrodes.columns:
-                if (col not in self.ELECTRODES_FIELDS and col not in self.electrodes_sidecar):
+                if (col not in self._ELECTRODES_FIELDS and col not in self.electrodes_sidecar):
                     warnings.warn(
                         f"Field {col} needs to be defined in electrodes_sidecar."
                     )    
@@ -952,7 +1047,7 @@ class EMGBIDSRecording(BIDSDataset):
             # Drop duplicates
             self.events = self.events.drop_duplicates(keep="last")
             for col in self.events.columns:
-                if (col not in self.EVENTS_FIELDS and col not in self.events_sidecar):
+                if (col not in self._EVENTS_FIELDS and col not in self.events_sidecar):
                     warnings.warn(
                         f"Field {col} needs to be defined in events_sidecar."
                     )
@@ -962,10 +1057,16 @@ class EMGBIDSRecording(BIDSDataset):
         """
         Add raw data and convert it into edf format
 
-        Args:
-            field_name (str): name of the field to be updated
-            mydata (np.ndarry): data matrix (n_channels x n_samples)
-            fsamp (float): Sampling frequency in Hz
+        Args
+        ----
+            field_name : str 
+                Name of the field to be updated
+
+            mydata : np.ndarry 
+                Data matrix (n_channels, n_samples)
+
+            fsamp  : float 
+                Sampling frequency in Hz
 
         """
 
@@ -976,13 +1077,25 @@ class EMGBIDSRecording(BIDSDataset):
 
         setattr(self, field_name, signal)
 
-        if field_name == "emg_data":
+        if field_name == "data":
             self.emg_sidecar["SamplingFrequency"] = fsamp
             self.emg_sidecar["RecordingDuration"] = seconds
             self.fsamp = fsamp
 
 
     def read_data_frame(self, df, idx):
+        """
+        Read data from a table of recording files
+
+        Args
+        ----
+            df : pd.DataFrame
+                Table recordings belonging to a BIDS dataset
+
+            idx : int
+                Row index of the recording to be imported    
+        
+        """
         self.subject_label = df.loc[idx, "sub"]
         label = df.loc[idx, "ses"]
         self.session_label = label if type(label) is str else None
@@ -1034,7 +1147,7 @@ class EMGBIDSNeuromotionRecording(EMGBIDSRecording):
 
         # If no inherited_metadata is provided, use all inheritable files
         if inherited_metadata is None:
-            inherited_metadata = self.INHERITABLE_FILES
+            inherited_metadata = self._INHERITABLE_FILES
 
         super().__init__(
             subject_label=subject_label,
@@ -1149,8 +1262,8 @@ class BIDSDecompositionDerivative(EMGBIDSRecording):
         "descriptions.tsv"
     ]
 
-    INHERITABLE_FILES = ["events.json"]
-    INHERITABLE_LEVELS = ["dataset" , "task", "subject", "session"]
+    _INHERITABLE_FILES = ["events.json"]
+    _INHERITABLE_LEVELS = ["dataset" , "task", "subject", "session"]
 
     def __init__(
         self,
