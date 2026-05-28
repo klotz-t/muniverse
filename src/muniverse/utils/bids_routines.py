@@ -1,3 +1,9 @@
+"""
+Classes to read and write EMG-BIDS datasets
+
+"""
+
+
 import json
 import os
 import re
@@ -13,6 +19,43 @@ from pyedflib.highlevel import read_edf, write_edf, make_signal_headers
 
 
 class BIDSDataset:
+    """
+    Class to handle dataset level data and metadata
+    of a BIDS dataset
+
+    Attributes
+    ----------
+
+        root : str
+            The root folder of a BIDS dataset
+
+        datasetname : str
+            The name of a BIDS dataset
+
+        readme : str
+            The README file of a BIDS dataset stored as a string    
+
+        dataset_sidecar : dict
+            Dictonary capturing the content of a *_dataset.json file  
+
+        subjects_data : pd.DataFrame
+            Table with subject information and pre-defined columns 
+            "participant_id", "age", "sex", "handedness", "weight" and "height"
+
+        subjects_sidecar : dict 
+            Dictonary capturing the content of a *_subjects.json file 
+
+        BIDSIGNORE : list of str , default []
+            List of ignored files    
+
+    References
+    ----------
+
+    .. https://bids-specification.readthedocs.io/en/stable/
+
+    
+    """
+
 
     BIDSIGNORE = []
 
@@ -21,6 +64,21 @@ class BIDSDataset:
         datasetname="dataset_name", 
         path="./"
     ):
+        """
+        Init function for the BIDSDataset class
+
+        Args
+        ----
+
+            datasetname : str
+                The name of your BIDS dataset
+
+            path : str
+                Path to the folder in which your BIDS dataset
+                is/should be stored    
+
+        
+        """
 
         self.root = str(Path(path) / datasetname) + "/"
         self.datasetname = datasetname
@@ -31,7 +89,8 @@ class BIDSDataset:
             "License": "The license for the dataset.",
             "Authors": ["LastName, FirstName", "LastName2, FirstName2", "..."]
         }
-        self.readme = """# Some BIDS Dataset
+        self.readme = """
+        # Some BIDS Dataset
 
         README is a required text file and should describe the dataset in more detail.
 
@@ -49,6 +108,7 @@ class BIDSDataset:
 
         Args
         ----
+
             overwrite : bool , default False
                 Whether to overwrite already existing files or not 
 
@@ -92,7 +152,7 @@ class BIDSDataset:
 
     def read(self):
         """
-        Import data from BIDS dataset
+        Read data from BIDS dataset
 
         """
 
@@ -124,12 +184,20 @@ class BIDSDataset:
 
     def set_metadata(self, field_name, source, overwrite=False):
         """
-        Generic metadata update function.
+        Function to update metadata fields.
 
-        Parameters:
-            field_name (str): name of the metadata attribute to update
-            source (dict, DataFrame, or str): data or file path
-            overwrite (bool): If False, the field is updated, otherwise overwritten by source
+        Args
+        ----
+            field_name : str 
+                name of the attribute/metadata field to be update
+
+            source : dict, DataFrame, or str 
+                Metadata (dict or str) or path to file (str) that should be used 
+                to update the metadata field
+     
+            overwrite : bool , default False 
+                If True, the attribute is overwritten by the given input.
+                Otherwise, the new input and aby existing content are merged. 
         """
 
         if field_name == "readme":
@@ -203,12 +271,20 @@ class BIDSDataset:
         """
         Summarize all files with a given extension that are part of a BIDS folder
 
-        Args:
-            suffix (str): Data type (e.g., emg)
-            extension (str): File extension to be filtered (e.g. 'edf' for all *.edf files)
+        Args
+        ----
 
-        Returns:
-            df (DataFrame): Data frame listing all files in the given folder
+            suffix : str 
+                File type to be listed (e.g., "emg")
+
+            extension : str 
+                File extension to be filtered (e.g. 'edf' for all *.edf files)
+
+        Returns
+        -------
+
+            df : pd.DataFrame 
+                Table with all files in the given folder
         """
 
         root = Path(self.root)
@@ -256,10 +332,7 @@ class BIDSDataset:
         return df
 
     def _set_participant_sidecar(self):
-        """
-        Return a template for initalizing the participant sidecar file
-
-        """
+        """Template for initalizing the participant sidecar file"""
 
         metadata = {
             "participant_id": {
@@ -300,16 +373,33 @@ class BIDSDataset:
         """
         API to run the BIDS validator
 
-        Args:
-            ignored_codes (list of str): List of ignored error codes
-            ignored_fields (list of str): List of ignored metadata fields
-            ignored_files (list of str): List of ignored files
-            print_errors (bool): If True print all errors
-            print_errors (warnings): If True print all warnings
-        Returns:
-            err (list of objects): List of all errors
-            war (list of objects): List of all warnings
-            valid (bool): True if there are no errors
+        Args
+        ----
+            ignored_codes : list of str , default []
+                List of ignored error codes
+
+            ignored_fields : list of str , default [] 
+                List of ignored metadata fields
+
+            ignored_files : list of str , default []
+                List of ignored files
+
+            print_errors : bool , default True
+                If True print all errors
+
+            print_warnings : bool , default True 
+                If True print all warnings
+
+        Returns
+        -------
+            err : list of dict 
+                List of all errors
+
+            war : list of dict 
+                List of all warnings
+
+            valid : bool 
+                True if there are no errors
         
         """
 
@@ -938,7 +1028,7 @@ class EMGBIDSNeuromotionRecording(EMGBIDSRecording):
         datasetname="dataset_name",
         fileformat="edf",
         fsamp=2048,
-        plfreq="n/a"
+        plfreq="n/a",
         inherited_metadata=None,
     ):
 
