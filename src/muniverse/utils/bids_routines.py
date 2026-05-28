@@ -12,18 +12,17 @@ import pandas as pd
 from pyedflib.highlevel import read_edf, write_edf, make_signal_headers
 
 
-class bids_dataset:
+class BIDSDataset:
 
     BIDSIGNORE = []
 
     def __init__(
         self, 
         datasetname="dataset_name", 
-        root="./", 
-        overwrite=False
+        path="./"
     ):
 
-        self.root = str(Path(root) / datasetname) + "/"
+        self.root = str(Path(path) / datasetname) + "/"
         self.datasetname = datasetname
         self.dataset_sidecar = {
             "Name": datasetname,
@@ -43,11 +42,15 @@ class bids_dataset:
         self.subjects_data = pd.DataFrame(
             columns=["participant_id", "age", "sex", "handedness", "weight", "height"]
         )
-        self.overwrite = overwrite
 
-    def write(self):
+    def write(self, overwrite=False):
         """
-        Export BIDS dataset
+        Save dataset in BIDS format
+
+        Args
+        ----
+            overwrite : bool , default False
+                Whether to overwrite already existing files or not 
 
         """
 
@@ -57,32 +60,32 @@ class bids_dataset:
 
         # write participant.tsv
         name = f"{self.root}participants.tsv"
-        if self.overwrite or not os.path.isfile(name):
+        if overwrite or not os.path.isfile(name):
             self.subjects_data.to_csv(name, sep="\t", index=False, header=True, na_rep="n/a")
-        elif not self.overwrite and os.path.isfile(name):
+        elif not overwrite and os.path.isfile(name):
             from_file = pd.read_table(name)
             if not from_file.equals(self.subjects_data):
                 self.subjects_data.to_csv(name, sep="\t", index=False, header=True, na_rep="n/a")
         # write participant.json
         name = f"{self.root}participants.json"
-        if self.overwrite or not os.path.isfile(name):
+        if overwrite or not os.path.isfile(name):
             with open(name, "w") as f:
                 json.dump(self.subjects_sidecar, f, indent=4)
         # write dataset.json
         name = f"{self.root}dataset_description.json"
-        if self.overwrite or not os.path.isfile(name):
+        if overwrite or not os.path.isfile(name):
             with open(name, "w") as f:
                 json.dump(self.dataset_sidecar, f, indent=4)
         # write README.md
         name = f"{self.root}README.md"
-        if self.overwrite or not os.path.isfile(name):
+        if overwrite or not os.path.isfile(name):
             with open(name, "w", encoding="utf-8") as f:
                 f.write(self.readme)    
 
         # write .bidsignore
         if len(self.BIDSIGNORE) > 0:
             fname = Path(self.root) / ".bidsignore"
-            if self.overwrite or not fname.exists():
+            if overwrite or not fname.exists():
                 fname.write_text("\n".join(self.BIDSIGNORE) + "\n")         
 
         return ()
@@ -332,7 +335,7 @@ class bids_dataset:
         return bids_version
 
 
-class bids_emg_recording(bids_dataset):
+class EMGBIDSRecording(BIDSDataset):
     """
     Class for handling EMG recordings in BIDS format.
 
@@ -382,7 +385,7 @@ class bids_emg_recording(bids_dataset):
         run_label="01",
         recording_label=None,
         datatype="emg",
-        root="./",
+        path="./",
         datasetname="datasetName",
         fileformat="edf",
         fsamp=2048,
@@ -395,11 +398,10 @@ class bids_emg_recording(bids_dataset):
 
         super().__init__(
             datasetname=datasetname,
-            root=root,
-            overwrite=overwrite,
+            path=path
         )
 
-        if isinstance(parent_dataset, bids_dataset):
+        if isinstance(parent_dataset, BIDSDataset):
             self.root = parent_dataset.root
             self.datasetname = parent_dataset.datasetname
             self.subjects_data = parent_dataset.subjects_data
@@ -657,10 +659,15 @@ class bids_emg_recording(bids_dataset):
 
         return metadata
 
-    def write(self):
+    def write(self, overwrite=False):
         """
         Save dataset in BIDS format
-        
+
+        Args
+        ----
+            overwrite : bool , default False
+                Whether to overwrite already existing files or not 
+
         """
         super().write()
 
@@ -737,7 +744,7 @@ class bids_emg_recording(bids_dataset):
             self.events.to_csv(filename, sep="\t", index=False, header=True, na_rep="n/a")
 
             name = self._get_bids_filename("events.json")
-            if ((self.overwrite or not os.path.isfile(name)) and self.events_sidecar):
+            if ((overwrite or not os.path.isfile(name)) and self.events_sidecar):
                 with open(name, "w") as f:
                     json.dump(self.events_sidecar, f, indent=4)
 
@@ -903,7 +910,7 @@ class bids_emg_recording(bids_dataset):
         self.read()
 
 
-class bids_neuromotion_recording(bids_emg_recording):
+class EMGBIDSNeuromotionRecording(EMGBIDSRecording):
     """
     Class for handling neuromotion simulation data in BIDS format.
     Inherits from bids_emg_recording and adds support for additional simulation-specific files.
@@ -927,12 +934,11 @@ class bids_neuromotion_recording(bids_emg_recording):
         recording_label=None,
         datatype="emg",
         parent_dataset=None,
-        root="./",
+        path="./",
         datasetname="dataset_name",
         fileformat="edf",
         fsamp=2048,
-        plfreq="n/a",
-        overwrite=False,
+        plfreq="n/a"
         inherited_metadata=None,
     ):
 
@@ -949,12 +955,11 @@ class bids_neuromotion_recording(bids_emg_recording):
             recording_label=recording_label,
             datatype=datatype,
             parent_dataset=parent_dataset,
-            root=root,
+            path=path,
             datasetname=datasetname,
             fsamp=fsamp,
             plfreq=plfreq,
             fileformat=fileformat,
-            overwrite=overwrite,
             inherited_metadata=inherited_metadata,
         )
 
@@ -980,10 +985,18 @@ class bids_neuromotion_recording(bids_emg_recording):
         )
         self.simulation_sidecar = {}
 
-    def write(self):
-        """Override write method to include simulated data"""
+    def write(self, overwrite=False):
+        """
+        Save dataset in BIDS format
+
+        Args
+        ----
+            overwrite : bool , default False
+                Whether to overwrite already existing files or not 
+
+        """
         # Call parent's write method to handle standard BIDS files
-        super().write()
+        super().write(overwrite=overwrite)
 
         # Write simulation-specific files
         filename = self._get_bids_filename("spikes.tsv")
@@ -1036,7 +1049,7 @@ class bids_neuromotion_recording(bids_emg_recording):
 
 
 
-class bids_decomp_derivatives(bids_emg_recording):
+class BIDSDecompositionDerivative(EMGBIDSRecording):
 
     BIDSIGNORE = [
         "*sources.edf",
@@ -1066,9 +1079,8 @@ class bids_decomp_derivatives(bids_emg_recording):
         inherited_metadata=None,
         inherited_level = None,
         fsamp = 2048,
-        root="./",
-        fileformat="edf",
-        overwrite=False,
+        path="./",
+        fileformat="edf"
     ):
 
         # Check if the function arguments are valid
@@ -1091,15 +1103,14 @@ class bids_decomp_derivatives(bids_emg_recording):
         self.run_label = run_label
         self.recording_label = recording_label
         self.desc_label = desc_label
-        self.overwrite = overwrite
         self.datatype = datatype
         self.fileformat = fileformat
         self.datasetname = datasetname
         self.pipelinename = pipelinename
 
         # Adopt labels from an emg recording in BIDS format
-        if isinstance(parent_recording, bids_emg_recording):
-            root = str(Path(parent_recording.root).parent)
+        if isinstance(parent_recording, EMGBIDSRecording):
+            path = str(Path(parent_recording.root).parent)
             datasetname = parent_recording.datasetname
             self.root = parent_recording.root
             self.datasetname = parent_recording.datasetname
@@ -1114,12 +1125,12 @@ class bids_decomp_derivatives(bids_emg_recording):
         # Make a BIDS compatible folder structure
         if format == "standalone":
             self.datasetname = f"{datasetname}-{pipelinename}"
-            self.derivative_root = str(Path(root) / self.datasetname) + "/"
+            self.derivative_root = str(Path(path) / self.datasetname) + "/"
         else:
             self.datasetname = datasetname
-            self.derivative_root = str(Path(root) / datasetname) + f"/derivatives/{pipelinename}/"
+            self.derivative_root = str(Path(path) / datasetname) + f"/derivatives/{pipelinename}/"
 
-        self.root = str(Path(root) / self.datasetname) + "/"
+        self.root = str(Path(path) / self.datasetname) + "/"
         self.derivative_datapath = self.derivative_root + datapath
         self.format = format
 
@@ -1149,7 +1160,8 @@ class bids_decomp_derivatives(bids_emg_recording):
 
         self.code = []
 
-        self.readme = """# Some BIDS derivative
+        self.readme = """
+        # Some BIDS derivative
 
         Your dataset description goes here
 
@@ -1253,9 +1265,14 @@ class bids_decomp_derivatives(bids_emg_recording):
 
         return name
 
-    def write(self):
+    def write(self, overwrite=False):
         """
         Save dataset in BIDS format
+
+        Args
+        ----
+            overwrite : bool , default False
+                Whether to overwrite already existing files or not 
 
         """
         # Generate an empty set of folders for your BIDS dataset
@@ -1271,7 +1288,7 @@ class bids_decomp_derivatives(bids_emg_recording):
         )
         # write events.json
         fname = self._get_bids_filename("events.json")
-        if self.overwrite or not os.path.isfile(fname):
+        if overwrite or not os.path.isfile(fname):
             with open(fname, "w") as f:
                 json.dump(self.events_sidecar, f, indent=4)   
         # write *_log.json
@@ -1280,7 +1297,7 @@ class bids_decomp_derivatives(bids_emg_recording):
             if not os.path.exists(f"{self.derivative_root}logs/{subfolder}"):   
                 os.makedirs(f"{self.derivative_root}logs/{subfolder}")   
             fname = self._get_bids_filename("log.json")
-            if self.overwrite or not os.path.isfile(fname):
+            if overwrite or not os.path.isfile(fname):
                 with open(fname, "w") as f:
                     json.dump(self.log, f, indent=4)   
         # write *_desc-decomposed_sources.edf + sidecar file
@@ -1297,25 +1314,25 @@ class bids_decomp_derivatives(bids_emg_recording):
                 json.dump(self.source_sidecar, f, indent=4)
         # write dataset.json
         fname = f"{self.derivative_root}dataset_description.json"
-        if self.overwrite or not os.path.isfile(fname):
+        if overwrite or not os.path.isfile(fname):
             with open(fname, "w") as f:
                 json.dump(self.dataset_sidecar, f, indent=4)   
         # write descriptions.tsv
         fname = f"{self.derivative_root}descriptions.tsv" 
-        if self.overwrite or not os.path.isfile(fname):
+        if overwrite or not os.path.isfile(fname):
             self.descriptions.to_csv(
                 fname, sep="\t", index=False, header=True, na_rep="n/a"
             )
         # write README
         if self.format == "standalone":
             name = f"{self.derivative_root}README.md"
-            if self.overwrite or not os.path.isfile(name):
+            if overwrite or not os.path.isfile(name):
                 with open(name, "w", encoding="utf-8") as f:
                     f.write(self.readme)      
         # write .bidsignore
         if len(self.BIDSIGNORE) > 0:
             fname = Path(self.root) / ".bidsignore"
-            if self.overwrite or not fname.exists():
+            if overwrite or not fname.exists():
                 fname.write_text("\n".join(self.BIDSIGNORE) + "\n")
         # Save code files
         if len(self.code) > 0:  
