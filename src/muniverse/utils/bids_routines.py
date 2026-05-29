@@ -476,7 +476,10 @@ class EMGBIDSRecording(BIDSDataset):
             Type of data (for now always EMG) 
 
         data : np.ndarray
-            Data matrx (n_channels, n_samples)     
+            Data matrx (n_channels, n_samples)  
+
+        fsamp : float
+            Sampling rate in Hz        
 
         fileformat : {"edf", "bdf"} , default "edf"
             File format used to store the data matrix 
@@ -1132,6 +1135,27 @@ class EMGBIDSNeuromotionRecording(EMGBIDSRecording):
     Inherits from EMGBIDSRecording and adds support for additional 
     simulation-specific files.
 
+    Extra Attributes
+    ----------------
+
+    spikes : pd.DataFrame
+        Table of the simulated (ground truth) motor unit spike labels
+
+    motor_units : pd.DataFrame
+        Table of motor unit properties with columns "source_id",
+        "recruitment_threshold", "depth", "innervation_zone",
+        "fibre_density", "fibre_length", "conduction_velocity" and "angle"  
+
+    internals : np.ndarray
+        Data matrix of internal states (n_states, n_samples)    
+
+    internals_sidecar : dict
+        Dictonary describing the data matrix in internals  
+
+    simulation_sidecar : dict
+        Dictonary of the simulation processing metadata           
+
+
     """
 
     BIDSIGNORE = [
@@ -1144,20 +1168,20 @@ class EMGBIDSNeuromotionRecording(EMGBIDSRecording):
 
     def __init__(
         self,
-        subject_label="sim01",
-        session_label=None,
-        task_label="isometric",
-        acq_label=None,
-        run_label="01",
-        recording_label=None,
-        datatype="emg",
-        parent_dataset=None,
-        path="./",
-        datasetname="dataset_name",
-        fileformat="edf",
-        fsamp=2048,
-        plfreq="n/a",
-        inherited_metadata=None,
+        subject_label: str = "sim01",
+        session_label: str | None = None,
+        task_label: str = "isometric",
+        acq_label: str | None = None,
+        run_label: str | None = "01",
+        recording_label: str | None = None,
+        datatype: Literal["emg"] = "emg",
+        parent_dataset: BIDSDataset | None = None,
+        path: str = "./",
+        datasetname: str = "dataset_name",
+        fileformat: Literal["edf", "bdf"] = "edf",
+        fsamp: float = 2048,
+        plfreq: float = "n/a",
+        inherited_metadata: list | None = None,
     ):
 
         # If no inherited_metadata is provided, use all inheritable files
@@ -1267,7 +1291,102 @@ class EMGBIDSNeuromotionRecording(EMGBIDSRecording):
 
 
 
-class BIDSDecompositionDerivative(EMGBIDSRecording):
+class BIDSDecompositionDerivative(EMGBIDSRecording): 
+    """
+    Class for handling decomposition outputs as BIDS-derivatives.
+    Note that while the implementation follows BIDS-derivative rules
+    the obtained outputs do not represent a standardized format.
+
+    Attributes
+    ----------
+
+        root : str
+            The root folder of a BIDS dataset
+   
+        derivative_root : str
+            Root folder for the derivative files. If you select the
+            "standalone" option, derivative_root and root are the same.    
+
+        datasetname : str
+            The name of a BIDS dataset
+
+        pipelinename : str
+            Name of your processing pipeline  
+
+        fileformat : {"edf", "bdf"} , default "edf"
+            File format used to store a data matrix       
+
+        readme : str
+            The README file of your BIDS derivative   
+
+        dataset_sidecar : dict
+            Dictonary capturing the content of a *_dataset.json file  
+            corresponding to your derivative
+
+        subject_label : str , default "01"
+            Label of the subject the recording belongs to
+
+        session_label : str or None , default None
+            Label of the session the recording belongs to   
+
+        task_label : str , default "taskName"
+            Label of the task perfomed in this recording 
+
+        acq_label : str or None , default None
+            Label distnguish multiple aquisition modes 
+
+        run_label : str or None , default "01"
+            Label to distnguish multiple repetitions of the same task  
+
+        recording_label : str or None , default None 
+            Label to distnguish data files from different aquisition systems    
+
+        desc_label : str
+            Label to distnguish processed files from the raw data     
+
+        datatype : str , default "emg"
+            Type of data the derivatibe was derived from (for now always EMG) 
+
+        fsamp : float
+            Sampling rate in Hz    
+
+        source : np.ndarray
+            Data matrix of the predicted sources (n_sources, n_samples)
+
+        source_sidecar : dict     
+            Dictonary corresponding to the "_source.json" file             
+ 
+        events : pd.DataFrame
+            Table of motor unit spikes. Must contain
+            the columns "onset" and "duration"
+
+        events_sidecar : dict     
+            Dictonary corresponding to the "_events.json" file   
+
+        descriptions : pd.DataFrame
+            Table definining the utilized desc labels with
+            columns "desc_id" and "description"       
+
+        log : dict
+            Dictonary of proecessing metadata
+
+        code : str
+            Path to the script/code generated this derivative        
+
+        inherited_metadata : dict    
+            Dictonary of inherited metadata files
+
+        inherited_levels : dict    
+            Dictonary with the levels of the inherited metadata files
+
+        format : {"subdir", "standalone"} , default "standalone"  
+            Indicates whether your derivative is a standalone BIDS-dataset
+            or is included as a sub-directory in a raw BIDS-dataset.          
+
+        BIDSIGNORE : list of str , default []
+            List of files/endings ignored by the validator
+    
+    """
 
     BIDSIGNORE = [
         "*sources.edf",
@@ -1282,23 +1401,23 @@ class BIDSDecompositionDerivative(EMGBIDSRecording):
 
     def __init__(
         self,
-        pipelinename="pipelineName",
-        format="standalone",
-        parent_recording=None,
-        datasetname="datasetName",
-        datatype="emg",
-        subject_label="01",
-        session_label=None,
-        task_label="isometric",
-        acq_label=None,
-        run_label="01",
-        recording_label=None,
-        desc_label="decomposed",
-        inherited_metadata=None,
-        inherited_level = None,
-        fsamp = 2048,
-        path="./",
-        fileformat="edf"
+        pipelinename: str = "pipelineName",
+        format: Literal["subdir", "standalone"] = "standalone",
+        parent_recording: EMGBIDSRecording | None = None,
+        datasetname: str = "datasetName",
+        datatype: Literal["emg"] = "emg",
+        subject_label: str = "01",
+        session_label: str | None = None,
+        task_label: str = "isometric",
+        acq_label: str | None = None,
+        run_label: str | None = "01",
+        recording_label: str | None = None,
+        desc_label: str = "decomposed",
+        inherited_metadata: list | None = None,
+        inherited_level: list | None = None,
+        fsamp: float = 2048,
+        path: str = "./",
+        fileformat: Literal["edf", "bdf"] = "edf"
     ):
 
         # Check if the function arguments are valid
