@@ -192,7 +192,7 @@ def get_events_tsv(requested_path, fsamp, mvc_level, duration_precision=1):
 # --------  Dataset-level metadata --------- #
 # ------------------------------------------ #
 
-metadatapath = str(Path(__file__).parent.parent) + '/bids_metadata/' 
+metadatapath = str(Path.home()) + '/Documents/CBM/github/muniverse-demo/bids_metadata/' 
 
 with open(metadatapath + 'grison_et_al_2025.json', 'r') as f:
     manual_metadata = json.load(f)
@@ -301,14 +301,36 @@ dataset_sidecar = manual_metadata["DatasetDescription"] #dataset_sidecar_templat
 dataset_sidecar["GeneratedBy"][0]["Version"] = __version__
 dataset_sidecar["GeneratedBy"][0]["License"] = __license__
 
+# Handle the data and metadata of the BIDS dataset
 Grison_2025 = BIDSDataset(
     datasetname='Grison_et_al_2025', 
     path=str(Path.home()) + '/Downloads/'
 )
+Grison_2025.get_default_participant_sidecar()
 Grison_2025.set_metadata(field_name='subjects_data', source=subjects_data)
 Grison_2025.set_metadata(field_name='dataset_sidecar', source=dataset_sidecar)
 Grison_2025.readme = readme
 Grison_2025.write()
+
+# Init the derivative
+Grison_2025_labels = BIDSDataset(
+    root=Grison_2025.root + 'derivatives/manual/',
+    datasetname='Grison_et_al_2025',
+    readme=""
+)
+derivative_sidecar = {
+    "Name": "Manual Outputs",
+    "BIDSVersion": Grison_2025_labels._get_bids_version(),
+    "DatasetType": "derivative",
+    "GeneratedBy": [
+        {
+            "Name": "Manual",
+            "Description": "Semi-automated expert-curated reference decomposition based on invasive EMG"
+        }
+    ]
+}
+Grison_2025_labels.set_metadata(field_name="dataset_sidecar", source=derivative_sidecar)
+Grison_2025_labels.write()
 
 # ------------------------------------------ #
 # -------  Loop over all recordings -------- #
@@ -403,14 +425,14 @@ for i in np.arange(n_sub):
 
             # Add the annotaed spike labels
             ref_labels = BIDSDecompositionDerivative(
-                parent_recording=emg_recording,
-                pipelinename="Manual",
-                format="subdir",
                 inherited_metadata=["events.json"],
-                inherited_level=["subject"]
+                inherited_level=["subject"],
+                root=Grison_2025_labels.root,
+                subject_label=str(i+1).zfill(2), 
+                task_label=task_label, 
+                run_label=str(k+1).zfill(2),
+                datatype="emg"
             )
-            pipeline_desc = "Semi-automated expert-curated reference decomposition based on invasive EMG"
-            ref_labels.dataset_sidecar["GeneratedBy"][0]["Description"] = pipeline_desc
             # Load data and reformat it to BIDS events format
             fname =  f"{sourcepath}{mvc_levels[j]}/{mvc_levels[j]}_spike_times.csv"
             label_df = pd.read_csv(fname)
@@ -444,6 +466,3 @@ err, warn, _ = Grison_2025.validate(
 
 print("The BIDS conversion has completed")
 print(f"Your BIDS dataset contains {len(err)} errors and {len(warn)} warnings")
-
-
-

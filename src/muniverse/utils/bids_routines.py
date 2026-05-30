@@ -165,13 +165,13 @@ class BIDSDataset(_BaseBIDS):
     root: str = None
     datasetname: str = "dataset_name"
     readme: str = ""
-    dataset_sidecar: dict = None
+    dataset_sidecar: dict = field(default_factory=dict)
     subjects_data: pd.DataFrame = field(
         default_factory=lambda: pd.DataFrame(columns=[
             "participant_id", "age", "sex", "handedness", "weight", "height"
         ])
     )
-    subjects_sidecar: dict = None
+    subjects_sidecar: dict = field(default_factory=dict)
 
 
     def __post_init__(
@@ -186,7 +186,7 @@ class BIDSDataset(_BaseBIDS):
             self.root = str(Path(self.root)) + "/"
 
         # Set a minimal dataset sidecar
-        if self.dataset_sidecar is None:
+        if not self.dataset_sidecar:
             self.dataset_sidecar = {
                 "Name": self.datasetname,
                 "BIDSVersion": self._get_bids_version()

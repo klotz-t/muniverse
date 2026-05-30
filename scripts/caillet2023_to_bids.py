@@ -308,6 +308,7 @@ Caillet_2023 = BIDSDataset(
 )
 Caillet_2023.set_metadata(field_name='subjects_data', source=subjects_data)
 Caillet_2023.set_metadata(field_name='dataset_sidecar', source=dataset_sidecar)
+Caillet_2023.get_default_participant_sidecar()
 Caillet_2023.readme = readme
 Caillet_2023.write()
 
