@@ -27,7 +27,7 @@ class _BaseBIDS:
 
     def set_metadata(self, field_name, source, overwrite=False):
         """
-        Function to update metadata fields.
+        Function to update metadata files.
 
         Args
         ----
@@ -42,9 +42,6 @@ class _BaseBIDS:
                 If True, the attribute is overwritten by the given input.
                 Otherwise, the new input and aby existing content are merged. 
         """
-
-        if field_name == "readme":
-            raise ValueError(f"Property {field_name} is not supported by this function.")
 
         current = getattr(self, field_name, None)
         if current is None:
@@ -272,7 +269,7 @@ class BIDSDataset(_BaseBIDS):
 
     def set_metadata(self, field_name, source, overwrite=False):
         """
-        Function to update metadata fields.
+        Function to update dataset-level metadata files.
 
         Args
         ----
@@ -288,8 +285,13 @@ class BIDSDataset(_BaseBIDS):
                 Otherwise, the new input and aby existing content are merged. 
         """
 
-        if field_name == "readme":
-            raise ValueError(f"Property {field_name} is not supported by this function.")
+        valid_fields = ["dataset_sidecar", "subjects_data", "subjects_sidecar"]
+
+        if not field_name in valid_fields:
+            raise ValueError(
+                f"Property {field_name} is not supported by this function."
+                f"Must be one of {valid_fields}."
+            )
         
         super().set_metadata(field_name, source, overwrite)
 
@@ -361,7 +363,7 @@ class BIDSDataset(_BaseBIDS):
 
         return df
 
-    def get_default_participant_sidecar(self):
+    def set_default_participant_sidecar(self):
         """Template for initalizing the participant sidecar file"""
 
         self.subjects_sidecar = {
@@ -555,7 +557,7 @@ class EMGBIDSRecording(_BaseBIDS):
     fileformat: Literal["edf", "bdf"] = "edf"
     data: np.ndarray = field(default_factory=lambda: np.empty((0,)))
     fsamp: float = 2048
-    plfreq: float = 50
+    plfreq: float | None = 50
     emg_sidecar: dict = field(default_factory=dict)
     channels: pd.DataFrame = field(
         default_factory=lambda: pd.DataFrame(columns=["name", "type", "units"])
@@ -586,9 +588,15 @@ class EMGBIDSRecording(_BaseBIDS):
     _FILE_FORMATS = ["edf", "edf+", "bdf", "bdf+"]
     # Required fields in EMG sidecar
     _EMG_SIDECAR_FIELDS = [
-            "EMGPlacementScheme", "EMGPlacementSchemeDescription", "EMGReference",
-            "SoftwareFilters", "RecordingType"
+        "EMGPlacementScheme", "EMGPlacementSchemeDescription", "EMGReference",
+        "SoftwareFilters", "RecordingType"
         ]
+    # Fields for the coordinate system sidecar
+    _COORD_FIELDS = [
+        "EMGCoordinateSystem", "EMGCoordinateSystemDescription",
+        "EMGCoordinateUnits", "ParentCoordinateSystem", 
+        "AnchorCoordinates", "AnchorElectrode"
+    ]
     # Predefined fields in tabular columns
     _CHANNELS_FIELDS = [
         "name", "type", "units", "description", "sampling_frequency",
@@ -633,16 +641,6 @@ class EMGBIDSRecording(_BaseBIDS):
         # Init a minimal EMG sidecar 
         if not self.emg_sidecar:
             self.emg_sidecar = self._init_emg_sidecar(self.fsamp, self.plfreq)
-
-        # Init a placeholder coordinate system
-        if not self.coord_sidecar:    
-            self.coord_sidecar = {
-                "templateCoordSystemName": {
-                    "EMGCoordinateSystem": "Other",
-                    "EMGCoordinateSystemDescription": "Free-form text description of the coordinate system", 
-                    "EMGCoordinateUnits": "mm"
-                }
-            }
 
         # Initialize empty inheritance dictionary
         self.inherited_metadata = {}
@@ -849,15 +847,10 @@ class EMGBIDSRecording(_BaseBIDS):
             filename = self._get_bids_filename("electrodes.tsv")
             self.electrodes.to_csv(filename, sep="\t", index=False, header=True, na_rep="n/a")
             # Coordinate systems metadata is only needed if the electrodes file exists
-            filename = self._get_bids_filename("space")
+            filename_tmp = self._get_bids_filename("space")
             for name, metadata in self.coord_sidecar.items():
-                if name == "templateCoordSystemName":
-                    warnings.warn(
-                        "You are writing an arbitrary template coordinate system."
-                        "Make sure to update the coord_sidecar content correctly."
-                    )
-                filename2 = f"{filename}-{name}_coordsystem.json"
-                with open(filename2, "w") as f:
+                filename = f"{filename_tmp}-{name}_coordsystem.json"
+                with open(filename, "w") as f:
                     json.dump(metadata, f, indent=4)
             # Electrodes sidecar is only needed if non pre-defined fields are used        
             if self.electrodes_sidecar:   
@@ -973,7 +966,7 @@ class EMGBIDSRecording(_BaseBIDS):
 
     def set_metadata(self, field_name, source, overwrite=False):
         """
-        Function to update metadata fields.
+        Function to update EMG recording-level metadata files.
 
         Args
         ----
@@ -986,8 +979,24 @@ class EMGBIDSRecording(_BaseBIDS):
      
             overwrite : bool , default False 
                 If True, the attribute is overwritten by the given input.
-                Otherwise, the new input and aby existing content are merged. 
+                Otherwise, the new input and the existing content are merged. 
         """
+
+        if field_name == "coord_sidecar":
+            raise ValueError(
+                "Use 'add_coordsystem' function to define a coordinate system"
+            )
+
+        valid_fields = [
+            "emg_sidecar", "channels", "electrodes", "channels_sidecar", 
+            "electrodes_sidecar", "events", "events_sidecar"
+        ]
+
+        if not field_name in valid_fields:
+            raise ValueError(
+                f"Property {field_name} is not supported by this function."
+                f"Must be one of {valid_fields}."
+            )
 
         super().set_metadata(field_name, source, overwrite)
 
@@ -1091,6 +1100,27 @@ class EMGBIDSRecording(_BaseBIDS):
 
         self.read()
 
+    def add_coordinate_system(self, name: str, metadata: dict):
+        """
+        Add a new coordinate system 
+
+        Args
+        ----
+
+            name : str
+                Unqiue name of the coordinate System
+
+            metadata : dict
+                Dictonary of coordinate system metadata    
+        
+        """
+
+        for k in metadata.keys():
+            if k not in self._COORD_FIELDS:
+                warnings.warn(f"{k} is not a valid coord_sidecar field")
+
+        self.coord_sidecar.update({name: metadata})    
+
 @dataclass
 class EMGBIDSNeuromotionRecording(EMGBIDSRecording):
     """
@@ -1173,6 +1203,20 @@ class EMGBIDSNeuromotionRecording(EMGBIDSRecording):
         )
         write_edf(filename, self.internals, signal_headers)
 
+    def set_metadata(self, field_name, source, overwrite=False):
+        
+        valid_fields = [
+            "spikes", "motor_units", "internals", "internals_sidecar",
+            "simulation_sidecar"
+        ]
+
+        if not field_name in valid_fields:
+            raise ValueError(
+                f"Property {field_name} is not supported by this function."
+                f"Must be one of {valid_fields}."
+            )
+        
+        super().set_metadata(field_name, source, overwrite)
 
     def read(self):
         """Override read method to include simulated data"""
@@ -1337,13 +1381,13 @@ class BIDSDecompositionDerivative(_BaseBIDS):
         if inherited_metadata is not None:
             self._set_inherited_metadata(inherited_metadata, inherited_level)
 
-    def _init_event_sidecar(self):
+    def set_default_events_sidecar(self):
         """
         Set up a template for the event sidecar json file
         
         """    
 
-        metadata = {
+        self.events_sidecar = {
             "onset": {
                 "Description": "Onset time of the event in seconds from recording start.",
                 "Unit": "s"
@@ -1364,8 +1408,6 @@ class BIDSDecompositionDerivative(_BaseBIDS):
                 "Description": "Free text event description."
             }
         }
-
-        return metadata
     
     def _get_bids_filename(self, extension):
 
