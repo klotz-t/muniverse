@@ -50,6 +50,7 @@ class _BaseCBSS():
             whitening_method: Literal["ZCA", "PCA", "Cholesky"] = "ZCA",
             whitening_backend: Literal["ed, svd"] = "ed",
             whitening_reg: str | float | None = "auto",
+            whitening_eps: float = 1e-10,
             spike_detection_exp: float = 2,
             spike_detection_min_delay: float = 0.01,
             verbose: bool = False
@@ -59,6 +60,7 @@ class _BaseCBSS():
         self.whitening_method = whitening_method
         self.whitening_backend = whitening_backend
         self.whitening_reg = whitening_reg
+        self.whitening_eps = whitening_eps
         self.spike_detection_exp = spike_detection_exp
         self.spike_detection_min_delay = spike_detection_min_delay
         self.verbose = verbose
@@ -111,7 +113,8 @@ class _BaseCBSS():
             Y = data, 
             method = self.whitening_method,
             backend = self.whitening_backend, 
-            regularization = self.whitening_reg 
+            regularization = self.whitening_reg,
+            eps=self.whitening_eps 
         )
 
         if return_data:
@@ -401,6 +404,7 @@ class FastIcaCBSS(_BaseCBSS):
             whitening_method: Literal["ZCA", "PCA", "Cholesky"] = "ZCA",
             whitening_backend: Literal["ed", "svd"] = "ed",
             whitening_reg: str | float | None = "auto",
+            whitening_eps: float = 1e-10,
             spike_detection_exp: float = 2,
             spike_detection_min_delay: float = 0.01,
             #spike_cluster_method: Literal["kmeans"] = "kmeans",
@@ -428,6 +432,7 @@ class FastIcaCBSS(_BaseCBSS):
             whitening_method = whitening_method,
             whitening_backend = whitening_backend, 
             whitening_reg = whitening_reg,
+            whitening_eps = whitening_eps,
             spike_detection_exp = spike_detection_exp,
             spike_detection_min_delay = spike_detection_min_delay,
             verbose = verbose
@@ -501,7 +506,7 @@ class FastIcaCBSS(_BaseCBSS):
         rng = np.random.default_rng(self.random_seed)
 
         # Convert data to the desired precision
-        sig = np.asarray(sig, dtype="float64")
+        sig = np.asarray(sig, dtype=np.float64)
 
         # Extend signals and subtract the mean and cut the edges
         ext_sig = self._extension(sig)

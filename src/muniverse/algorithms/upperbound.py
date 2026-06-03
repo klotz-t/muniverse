@@ -100,6 +100,7 @@ class UpperBoundCBSS(_BaseCBSS):
             whitening_method: Literal["ZCA", "PCA", "Cholesky"] = "ZCA",
             whitening_backend: Literal["ed", "svd"] = "ed",
             whitening_reg: str | float | None = "auto",
+            whitening_eps: float = 1e-12,
             spike_detection_exp: float = 2,
             spike_detection_min_delay: float = 0.01,
             win_alpha: float = 0,
@@ -112,6 +113,7 @@ class UpperBoundCBSS(_BaseCBSS):
             whitening_method = whitening_method,
             whitening_backend = whitening_backend,
             whitening_reg = whitening_reg,
+            whitening_eps = whitening_eps,
             spike_detection_exp = spike_detection_exp,
             spike_detection_min_delay = spike_detection_min_delay,
             verbose = verbose
