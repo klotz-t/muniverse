@@ -497,7 +497,8 @@ def whitening(
             reg = regularization
         else:
             reg = 0
-        S_reg = np.sqrt(S + reg + eps)   
+        #S_reg = np.sqrt(S + reg + eps)   
+        S_reg = np.sqrt(np.maximum(S + reg + eps, eps))
         S_inv = 1.0 / S_reg
 
         if method == "ZCA":
@@ -521,7 +522,8 @@ def whitening(
             reg = regularization
         else:
             reg = 0
-        S_reg = np.sqrt(S + reg + eps)    
+        #S_reg = np.sqrt(S + reg + eps)
+        S_reg = np.sqrt(np.maximum(S + reg + eps, eps))    
         S_inv = 1.0 / S_reg
 
         if method == "ZCA":
