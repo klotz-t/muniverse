@@ -39,61 +39,88 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "src"))
 
 def translate_config(old_config: dict) -> dict:
     """
-    Convert an old-format simulation config to the current datasets-module format.
+    Build a new-format config by starting from the neuromotion.json default and
+    patching in trial-specific values from old_config.
 
-    Changes made:
-    - Container-specific top-level keys removed (PathToBioMimeWeights, etc.)
+    Key conversions from old format:
     - EffortLevel → TargetEffort
     - MovementDOF case normalised ("Radial-Ulnar-deviation" → "Radial-Ulnar-Deviation")
-    - InitialAngle added for Sinusoid/Triangular angle profiles:
-        Sinusoid: derived from old TargetAngle (centre) and SinAmplitude (half-range)
-        Triangular: defaults to 0 (neutral position)
-    - SinAmplitude removed (absorbed into InitialAngle/TargetAngle)
-    - _description fields stripped
+    - Sinusoid angle: old TargetAngle (centre) + SinAmplitude (signed half-range)
+      → new InitialAngle = centre + amplitude, TargetAngle = centre - amplitude
+    - Triangular angle: InitialAngle defaults to 0
     """
-    config = copy.deepcopy(old_config)
+    default_path = os.path.join(REPO_ROOT, "configs", "neuromotion.json")
+    with open(default_path) as f:
+        config = json.load(f)
 
-    # Strip container-internal top-level keys
-    for key in ("PathToBioMimeWeights", "MorphMUAPS", "PathToMUAPFile"):
-        config.pop(key, None)
+    old_subj = old_config["SubjectConfiguration"]
+    old_mov = old_config["MovementConfiguration"]
+    old_rec = old_config["RecordingConfiguration"]
+    old_params = old_mov["MovementProfileParameters"]
 
-    # Strip internal description annotations
-    for section in ("SubjectConfiguration", "RecordingConfiguration", "MovementConfiguration"):
-        config.get(section, {}).pop("_description", None)
+    # --- SubjectConfiguration ---
+    config["SubjectConfiguration"]["SubjectSeed"] = old_subj["SubjectSeed"]
+    config["SubjectConfiguration"]["FibreDensity"] = old_subj["FibreDensity"]
+    config["SubjectConfiguration"]["MuscleLabels"] = old_subj["MuscleLabels"]
+    config["SubjectConfiguration"]["MuscleMotorUnitCounts"] = old_subj["MuscleMotorUnitCounts"]
 
-    movement_cfg = config["MovementConfiguration"]
-    movement_cfg.pop("MovementType", None)
-
-    # Fix MovementDOF case
-    dof = movement_cfg.get("MovementDOF", "")
+    # --- MovementConfiguration ---
+    config["MovementConfiguration"]["TargetMuscle"] = old_mov["TargetMuscle"]
+    dof = old_mov.get("MovementDOF", "")
     if dof.lower() == "radial-ulnar-deviation":
-        movement_cfg["MovementDOF"] = "Radial-Ulnar-Deviation"
+        dof = "Radial-Ulnar-Deviation"
+    config["MovementConfiguration"]["MovementDOF"] = dof
 
-    params = movement_cfg["MovementProfileParameters"]
+    new_params = config["MovementConfiguration"]["MovementProfileParameters"]
+    new_params["EffortProfile"] = old_params["EffortProfile"]
+    new_params["TargetEffort"] = old_params.get("TargetEffort", old_params.get("EffortLevel"))
+    new_params["AngleProfile"] = old_params["AngleProfile"]
+    new_params["NRepetitions"] = old_params.get("NRepetitions", 1)
+    new_params["RestDuration"] = old_params["RestDuration"]
+    new_params["RampDuration"] = old_params["RampDuration"]
+    new_params["HoldDuration"] = old_params["HoldDuration"]
+    new_params["SinFrequency"] = old_params.get("SinFrequency", 0)
+    new_params["MovementDuration"] = old_params["MovementDuration"]
 
-    # EffortLevel → TargetEffort
-    if "EffortLevel" in params and "TargetEffort" not in params:
-        params["TargetEffort"] = params.pop("EffortLevel")
-    elif "EffortLevel" in params:
-        params.pop("EffortLevel")
-
-    # Derive InitialAngle for profiles that need it
-    angle_profile = params.get("AngleProfile", "Constant")
-    target_angle_old = params.get("TargetAngle", 0)
-    sin_amplitude = params.pop("SinAmplitude", 0)
+    angle_profile = old_params["AngleProfile"]
+    target_angle_old = old_params.get("TargetAngle", 0)
+    sin_amplitude = old_params.get("SinAmplitude", 0)
 
     if angle_profile == "Sinusoid":
-        # Old convention: TargetAngle = centre, SinAmplitude = signed half-range.
-        # New _sinusoid_angle_profile uses:
-        #   offset = (target + initial)/2, amplitude = (target - initial)/2
+        # Old: TargetAngle = centre, SinAmplitude = signed half-range.
+        # New: offset = (target + initial)/2, amplitude = (target - initial)/2
         # So: initial = centre + sin_amplitude, target = centre - sin_amplitude
-        params["InitialAngle"] = target_angle_old + sin_amplitude
-        params["TargetAngle"] = target_angle_old - sin_amplitude
+        new_params["InitialAngle"] = target_angle_old + sin_amplitude
+        new_params["TargetAngle"] = target_angle_old - sin_amplitude
     elif angle_profile == "Triangular":
-        # Old code moved from neutral (0) to TargetAngle and back.
-        if "InitialAngle" not in params:
-            params["InitialAngle"] = 0
-    # Constant profile: no InitialAngle needed.
+        new_params["InitialAngle"] = old_params.get("InitialAngle", 0)
+        new_params["TargetAngle"] = target_angle_old
+    else:
+        new_params["InitialAngle"] = old_params.get("InitialAngle", 0)
+        new_params["TargetAngle"] = target_angle_old
+
+    # --- RecordingConfiguration ---
+    config["RecordingConfiguration"]["SamplingFrequency"] = old_rec["SamplingFrequency"]
+    config["RecordingConfiguration"]["NoiseSeed"] = old_rec.get("NoiseSeed")
+    config["RecordingConfiguration"]["NoiseLeveldb"] = old_rec.get("NoiseLeveldb")
+    if "ElectrodeConfiguration" in old_rec:
+        old_elec = old_rec["ElectrodeConfiguration"]
+        new_elec = config["RecordingConfiguration"]["ElectrodeConfiguration"]
+        n_rows = old_elec.get("NRows", 10)
+        # BioMime always outputs 32 columns; DesiredNCols is what the old config called NCols
+        desired_n_cols = old_elec.get("DesiredNCols", old_elec.get("NCols", 10))
+        new_elec["NRows"] = n_rows
+        new_elec["NCols"] = 32
+        new_elec["NElectrodes"] = n_rows * 32
+        new_elec["DesiredNCols"] = desired_n_cols
+        if "InterElectrodeDistance" in old_elec:
+            new_elec["InterElectrodeDistance"] = old_elec["InterElectrodeDistance"]
+    if "FilterProperties" in old_rec:
+        old_filt = old_rec["FilterProperties"]
+        new_filt = config["RecordingConfiguration"]["FilterProperties"]
+        for key in ("FilterType", "CutoffFrequency", "FilterOrder"):
+            if key in old_filt:
+                new_filt[key] = old_filt[key]
 
     return config
 
@@ -158,8 +185,10 @@ def load_old_effort_angle(config: dict, fs: float) -> tuple[np.ndarray, np.ndarr
     from muniverse.datasets.movement import (
         generate_effort_profile, generate_angle_profile,
     )
-    effort, _ = generate_effort_profile(config)
-    angle, _ = generate_angle_profile(config)
+    # Deep copy to prevent validate_effort_profile_config from mutating the caller's config
+    cfg = copy.deepcopy(config)
+    effort, _ = generate_effort_profile(cfg)
+    angle, _ = generate_angle_profile(cfg)
     return effort, angle
 
 
@@ -259,7 +288,7 @@ def plot_trial_comparison(
     t_ang_old = np.arange(len(old_angle)) / fs
     t_ang_new = np.arange(len(new_angle)) / fs
 
-    fig, axes = plt.subplots(4, 1, figsize=(13, 12))
+    fig, axes = plt.subplots(5, 1, figsize=(13, 15))
     fig.suptitle(f"Reproducibility: {trial_name}", fontsize=11, fontweight="bold")
 
     # 1. Effort profile
@@ -278,15 +307,29 @@ def plot_trial_comparison(
     ax.set_title("Angle profile")
     ax.legend(loc="upper right", fontsize=8)
 
-    # 3. Spike raster (first active unit from each)
+    # 3. Spike count by motor unit
     ax = axes[2]
+    old_counts = np.array([len(s) for s in old_spikes])
+    new_counts = np.array([len(s) for s in new_spikes])
+    mu_idx_old = np.arange(len(old_counts))
+    mu_idx_new = np.arange(len(new_counts))
+    ax.plot(mu_idx_old, old_counts, lw=1.2, label=f"old  (total={old_counts.sum()})")
+    ax.plot(mu_idx_new, new_counts, lw=1.2, ls="--", color="tab:orange",
+            label=f"regen (total={new_counts.sum()})")
+    ax.set_ylabel("Spike count")
+    ax.set_xlabel("Motor unit index")
+    ax.set_title("Spike count by motor unit")
+    ax.legend(loc="upper right", fontsize=8)
+
+    # 4. Spike raster (first active unit from each)
+    ax = axes[3]
     mu_old = _first_active(old_spikes)
     mu_new = _first_active(new_spikes)
     if len(old_spikes[mu_old]) > 0:
         ax.eventplot(old_spikes[mu_old] / fs, lineoffsets=1.0, linelengths=0.7,
                      linewidths=0.8, label=f"old MU{mu_old}")
     if len(new_spikes) > mu_new and len(new_spikes[mu_new]) > 0:
-        ax.eventplot(new_spikes[mu_new] / fs, lineoffsets=0.0, linelengths=0.7,
+        ax.eventplot(np.array(new_spikes[mu_new]) / fs, lineoffsets=0.0, linelengths=0.7,
                      linewidths=0.8, colors="tab:orange", label=f"regen MU{mu_new}")
     ax.set_title("Spike trains (first active MU)")
     ax.set_xlabel("Time (s)")
@@ -294,8 +337,8 @@ def plot_trial_comparison(
     ax.set_yticklabels(["regen", "old"])
     ax.legend(loc="upper right", fontsize=8)
 
-    # 4. EMG channel 0
-    ax = axes[3]
+    # 5. EMG channel 0
+    ax = axes[4]
     ax.plot(t_old, old_emg_flat[0], lw=0.5, label="old ch0")
     ax.plot(t_new, new_emg_flat[0], lw=0.5, alpha=0.8, color="tab:orange", label="regen ch0")
     ax.set_ylabel("Amplitude (V)")
@@ -319,6 +362,138 @@ def plot_trial_comparison(
     plt.close(fig)
     print(f"    [plot] Saved {save_path}")
     return corr, rms_old, rms_new
+
+
+def reconstruct_full_emg(muaps, spikes_raw, muap_angle_labels, angle_profile):
+    """Reconstruct the full (n_rows, n_cols, T) EMG from the cached MUAP library."""
+    if isinstance(spikes_raw, np.ndarray) and spikes_raw.dtype == object:
+        spikes = [spikes_raw[i] for i in range(len(spikes_raw))]
+    else:
+        spikes = list(spikes_raw)
+
+    n_units, steps, n_rows, n_cols, win = muaps.shape
+    T = len(angle_profile)
+    offset = win // 2
+    full_emg = np.zeros((n_rows, n_cols, T))
+
+    for unit in range(n_units):
+        for firing in spikes[unit]:
+            if int(firing) >= T:
+                continue
+            curr_angle = angle_profile[int(firing)]
+            muap_idx = int(np.argmin(np.abs(muap_angle_labels - curr_angle)))
+            curr_muap = muaps[unit, muap_idx]
+            init_emg = max(0, firing - offset)
+            end_emg = min(firing + offset, T)
+            init_muap = init_emg - (firing - offset)
+            end_muap = end_emg - (firing + offset) + win
+            full_emg[:, :, init_emg:end_emg] += curr_muap[:, :, init_muap:end_muap]
+
+    return full_emg
+
+
+def diagnose_electrode_selection(new_results, desired_cols=10):
+    """
+    Tests the electrode selection bug hypothesis.
+
+    Reconstructs the full 10×32 EMG from cached muaps/spikes and applies both:
+      - NEW code's correct selection: (n_rows, desired_cols, T)
+      - OLD code's BUGGY selection: col-major indices on a row-major array
+
+    Prints RMS of each selection so we can check if the bug explains the ~3.3x amplitude gap.
+    """
+    muaps = new_results['muaps']            # (n_units, steps, 10, 32, win)
+    spikes_raw = new_results['spikes']
+    muap_angle_labels = new_results['muap_angle_labels']
+    angle_profile = new_results['angle_profile']
+
+    print("  [elec_diag] Reconstructing full 10×32 EMG from cached muaps…")
+    full_emg = reconstruct_full_emg(muaps, spikes_raw, muap_angle_labels, angle_profile)
+    # full_emg: (10, 32, T)
+    n_rows, n_cols, T = full_emg.shape
+
+    # --- New code: correct row-major selection ---
+    rms_per_col = np.sqrt(np.mean(full_emg ** 2, axis=(0, 2)))  # (32,)
+    center_col = int(np.argmax(rms_per_col))
+    half = desired_cols // 2
+    selected_cols = [(center_col - half + i) % n_cols for i in range(desired_cols)]
+    new_sel_emg = full_emg[:, selected_cols, :]   # (10, 10, T)
+    rms_new_correct = float(np.sqrt(np.mean(new_sel_emg ** 2)))
+    rms_new_ch0 = float(np.sqrt(np.mean(new_sel_emg[0, 0] ** 2)))
+
+    # --- Old code: BUGGY col-major indices applied to row-major (T, 320) array ---
+    # channel i in (T, 320) = electrode (row_{i//32}, col_{i%32})
+    emg_flat = full_emg.reshape(n_rows * n_cols, T).T   # (T, 320) row-major
+    old_indices = [col * n_rows + row for col in selected_cols for row in range(n_rows)]
+    old_sel_emg = emg_flat[:, old_indices]              # (T, 100)
+    rms_old_buggy = float(np.sqrt(np.mean(old_sel_emg ** 2)))
+    rms_old_buggy_ch0 = float(np.sqrt(np.mean(old_sel_emg[:, 0] ** 2)))
+
+    # What physical electrode does old ch0 map to?
+    old_ch0_idx = old_indices[0]
+    old_ch0_phys_row = old_ch0_idx // n_cols
+    old_ch0_phys_col = old_ch0_idx % n_cols
+
+    print(f"  [elec_diag] center_col = {center_col},  selected_cols = {selected_cols}")
+    print(f"  [elec_diag] old ch0 index in (T,320) = {old_ch0_idx}"
+          f"  -> physical (row={old_ch0_phys_row}, col={old_ch0_phys_col})")
+    print(f"  [elec_diag] new correct selection  -- all-ch RMS: {rms_new_correct:.6f}  ch0 RMS: {rms_new_ch0:.6f}")
+    print(f"  [elec_diag] old BUGGY selection    -- all-ch RMS: {rms_old_buggy:.6f}  ch0 RMS: {rms_old_buggy_ch0:.6f}")
+    print(f"  [elec_diag] RMS ratio (new/old)    -- all-ch: {rms_new_correct/rms_old_buggy:.2f}x  "
+          f"ch0: {rms_new_ch0/rms_old_buggy_ch0:.2f}x")
+
+    # Per-channel RMS arrays for plotting
+    rms_new_per_ch = np.sqrt(np.mean(new_sel_emg.reshape(-1, T) ** 2, axis=1))  # (100,)
+    rms_buggy_per_ch = np.sqrt(np.mean(old_sel_emg.T ** 2, axis=1))             # (100,)
+
+    return center_col, rms_new_per_ch, rms_buggy_per_ch
+
+
+def plot_channel_rms_comparison(
+    old_emg: np.ndarray,
+    rms_new_per_ch: np.ndarray,
+    rms_buggy_per_ch: np.ndarray,
+    trial_name: str,
+    save_path: str,
+):
+    """
+    Plot per-channel RMS for old EDF data, new correct selection, and new buggy selection.
+    old_emg: (n_rows, n_cols, T) loaded from EDF.
+    """
+    T = old_emg.shape[2]
+    rms_old_per_ch = np.sqrt(np.mean(old_emg.reshape(-1, T) ** 2, axis=1))  # (100,)
+
+    ch_idx = np.arange(len(rms_old_per_ch))
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig.suptitle(f"Per-channel RMS: {trial_name}", fontsize=9, fontweight="bold")
+
+    # Line plot
+    ax = axes[0]
+    ax.plot(ch_idx, rms_old_per_ch,   lw=1.2, label="old EDF (buggy selection saved to disk)")
+    ax.plot(ch_idx, rms_new_per_ch,   lw=1.2, label="new (correct column selection)")
+    ax.plot(ch_idx, rms_buggy_per_ch, lw=1.2, ls="--", label="new EMG with old buggy selection")
+    ax.set_xlabel("Channel index (flattened)")
+    ax.set_ylabel("RMS amplitude")
+    ax.set_title("Per-channel RMS by channel order")
+    ax.legend(fontsize=8)
+
+    # Histogram
+    ax = axes[1]
+    all_vals = np.concatenate([rms_old_per_ch, rms_new_per_ch, rms_buggy_per_ch])
+    bins = np.linspace(0, all_vals.max() * 1.05, 30)
+    ax.hist(rms_old_per_ch,   bins=bins, alpha=0.6, label="old EDF")
+    ax.hist(rms_new_per_ch,   bins=bins, alpha=0.6, label="new (correct)")
+    ax.hist(rms_buggy_per_ch, bins=bins, alpha=0.6, label="new EMG, old buggy sel.")
+    ax.set_xlabel("RMS amplitude")
+    ax.set_ylabel("Channel count")
+    ax.set_title("RMS distribution across channels")
+    ax.legend(fontsize=8)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150)
+    plt.close(fig)
+    print(f"    [plot] Saved {save_path}")
 
 
 def plot_summary(summary_rows: list, output_dir: str):
@@ -351,22 +526,24 @@ def plot_summary(summary_rows: list, output_dir: str):
 # ---------------------------------------------------------------------------
 
 def discover_trials(old_data_dir: str) -> list[dict]:
-    """Return list of dicts with paths for each trial."""
+    """Return list of dicts with paths for each trial, searching recursively."""
     trials = []
-    for fname in sorted(os.listdir(old_data_dir)):
-        if not fname.endswith("_simulation.json"):
-            continue
-        base = fname.replace("_simulation.json", "")
-        trial = {
-            "name": base,
-            "sim_json": os.path.join(old_data_dir, fname),
-            "edf": os.path.join(old_data_dir, f"{base}_emg.edf"),
-            "tsv": os.path.join(old_data_dir, f"{base}_spikes.tsv"),
-        }
-        if os.path.exists(trial["edf"]) and os.path.exists(trial["tsv"]):
-            trials.append(trial)
-        else:
-            print(f"[warn] Skipping {base}: missing EDF or TSV")
+    for root, _, files in os.walk(old_data_dir):
+        for fname in sorted(files):
+            if not fname.endswith("_simulation.json"):
+                continue
+            base = fname.replace("_simulation.json", "")
+            trial = {
+                "name": base,
+                "sim_json": os.path.join(root, fname),
+                "edf": os.path.join(root, f"{base}_emg.edf"),
+                "tsv": os.path.join(root, f"{base}_spikes.tsv"),
+            }
+            if os.path.exists(trial["edf"]) and os.path.exists(trial["tsv"]):
+                trials.append(trial)
+            else:
+                print(f"[warn] Skipping {base}: missing EDF or TSV")
+    trials.sort(key=lambda t: t["name"])
     return trials
 
 
@@ -393,7 +570,7 @@ def main():
 
     summary_rows = []
 
-    for trial in trials:
+    for trial in trials[:1]:
         name = trial["name"]
         print(f"=== {name} ===")
 
@@ -419,7 +596,7 @@ def main():
         print("  Loading old data...")
         old_emg = load_old_emg(trial["edf"])
         old_spikes = load_old_spikes(trial["tsv"])
-        old_effort, old_angle = load_old_effort_angle(old_config, fs)
+        old_effort, old_angle = load_old_effort_angle(new_config, fs)
 
         # Regenerate
         trial_output_dir = os.path.join(output_dir, name)
@@ -438,6 +615,13 @@ def main():
                 sys.exit(1)
             print("  Regenerating...")
             new_results = regenerate_trial(new_config, npz_path, args.engine, args.container)
+
+        # Electrode selection bug diagnostic
+        elec_cfg = new_config["RecordingConfiguration"]["ElectrodeConfiguration"]
+        desired_cols = elec_cfg.get("DesiredNCols", elec_cfg["NCols"])
+        _, rms_new_per_ch, rms_buggy_per_ch = diagnose_electrode_selection(new_results, desired_cols=desired_cols)
+        rms_plot_path = os.path.join(trial_output_dir, "channel_rms_comparison.png")
+        plot_channel_rms_comparison(old_emg, rms_new_per_ch, rms_buggy_per_ch, name, rms_plot_path)
 
         # Save translated config next to regen result for reference
         cfg_path = os.path.join(trial_output_dir, "translated_config.json")
@@ -470,7 +654,9 @@ def main():
         csv_path = os.path.join(output_dir, "summary.csv")
         df.to_csv(csv_path, index=False)
         print(f"[summary] Saved {csv_path}")
-        print(df.to_string(index=False))
+        for _, row in df.iterrows():
+            print(f"  {row['name']}")
+            print(f"    corr={row['corr']:.4f}  rms_old={row['rms_old']:.6f}  rms_new={row['rms_new']:.6f}")
 
 
 if __name__ == "__main__":
