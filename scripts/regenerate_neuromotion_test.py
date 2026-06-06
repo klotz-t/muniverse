@@ -570,7 +570,7 @@ def main():
 
     summary_rows = []
 
-    for trial in trials[:1]:
+    for trial in trials:
         name = trial["name"]
         print(f"=== {name} ===")
 
