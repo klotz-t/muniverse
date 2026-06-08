@@ -29,6 +29,7 @@
         "whitening_method": "ZCA",
         "whitening_backend": "ed",
         "whitening_reg": "auto",
+        "whitening_eps": 1e-10,
         "spike_detection_exp": 2,
         "spike_detection_min_delay": 0.01,
         "ica_iterations": 100,
