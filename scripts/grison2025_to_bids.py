@@ -306,7 +306,7 @@ Grison_2025 = BIDSDataset(
     datasetname='Grison_et_al_2025', 
     path=str(Path.home()) + '/Downloads/'
 )
-Grison_2025.get_default_participant_sidecar()
+Grison_2025.set_default_participant_sidecar()
 Grison_2025.set_metadata(field_name='subjects_data', source=subjects_data)
 Grison_2025.set_metadata(field_name='dataset_sidecar', source=dataset_sidecar)
 Grison_2025.readme = readme
@@ -447,6 +447,7 @@ for i in np.arange(n_sub):
                 pass
             else:
                 ref_labels.add_spikes(label_df, fsamp=fsamp)
+                ref_labels.set_default_events_sidecar()
                 ref_labels.write()
 
             phase = phase + 1
@@ -466,3 +467,6 @@ err, warn, _ = Grison_2025.validate(
 
 print("The BIDS conversion has completed")
 print(f"Your BIDS dataset contains {len(err)} errors and {len(warn)} warnings")
+
+
+

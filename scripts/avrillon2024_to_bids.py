@@ -394,7 +394,7 @@ Avrillon_2024 = BIDSDataset(
     path=str(Path.home()) + '/Downloads/'
 )
 Avrillon_2024.readme = readme
-Avrillon_2024.get_default_participant_sidecar()
+Avrillon_2024.set_default_participant_sidecar()
 Avrillon_2024.set_metadata(field_name='subjects_data', source=subjects_data)
 Avrillon_2024.set_metadata(field_name='dataset_sidecar', source=dataset_sidecar)
 Avrillon_2024.write(overwrite=True)
