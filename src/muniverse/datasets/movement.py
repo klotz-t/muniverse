@@ -130,19 +130,29 @@ def _create_angle_profile(params: Dict, samples: int, fs: float, movement_dof: s
     initial_angle = params.get("InitialAngle")
     target_angle = params.get("TargetAngle")
     n_reps = params.get("NRepetitions", 1)
-    
+
     if profile_type == "Constant":
         return np.full(samples, target_angle)
     elif profile_type == "Triangular":
         ramp_duration = params.get("RampDuration")
         return _triangular_angle_profile(rest_duration, ramp_duration, initial_angle, target_angle, n_reps, samples, fs, movement_dof)
+    elif profile_type == "Waypoint":
+        ramp_duration = params.get("RampDuration")
+        waypoint_angles = params.get("WaypointAngles")
+        waypoint_speeds = params.get("WaypointSpeeds")
+        waypoint_holds  = params.get("WaypointHolds")
+        return _waypoint_angle_profile(
+            rest_duration, ramp_duration,
+            waypoint_angles, waypoint_speeds, waypoint_holds,
+            n_reps, samples, fs, movement_dof,
+        )
     elif profile_type == "Sinusoid":
         sin_frequency = params.get("SinFrequency")
         ramp_duration = params.get("RampDuration")
         hold_duration = params.get("HoldDuration")
         return _sinusoid_angle_profile(sin_frequency, rest_duration, ramp_duration, hold_duration, initial_angle, target_angle, n_reps, samples, fs, movement_dof)
     else:
-        raise ValueError(f"Unsupported angle profile type: '{profile_type}'. Only 'Constant', 'Triangular', and 'Sinusoid' are supported.")
+        raise ValueError(f"Unsupported angle profile type: '{profile_type}'. Only 'Constant', 'Triangular', 'Waypoint', and 'Sinusoid' are supported.")
 
 
 def _trapezoid_profile(rest_duration: float, ramp_duration: float, hold_duration: float, target_effort: float, n_reps: int, samples: int, fs: float) -> np.ndarray:
@@ -222,12 +232,60 @@ def _triangular_angle_profile(rest_duration: float, ramp_duration: float, initia
     ramp_samples = int(fs * ramp_duration)
     
     one_cycle = np.concatenate([
-        np.zeros(rest_samples),
+        np.full(rest_samples, initial_angle),
         np.linspace(initial_angle, target_angle, ramp_samples),
         np.linspace(target_angle, initial_angle, ramp_samples),
-        np.zeros(rest_samples)
+        np.full(rest_samples, initial_angle),
     ])
     
+    profile = np.tile(one_cycle, n_reps)
+    profile = _adjust_length(profile, samples, fs)
+    min_angle, max_angle = _get_angle_range(movement_dof)
+    return np.clip(profile, min_angle, max_angle)
+
+
+def _waypoint_angle_profile(
+    rest_duration: float,
+    ramp_duration: float,
+    waypoint_angles: list,
+    waypoint_speeds: list,
+    waypoint_holds: list,
+    n_reps: int,
+    samples: int,
+    fs: float,
+    movement_dof: str,
+) -> np.ndarray:
+    """Angle profile defined by waypoints with per-segment speeds and per-waypoint holds.
+
+    For waypoints W = [w0, w1, ..., wN] and holds H = [h0, h1, ..., hN]:
+      - pause h_i seconds at w_i, then travel to w_{i+1} at speed S_i deg/s
+    The movement runs during the effort hold phase; the angle is held at w0 (typically 0)
+    during the rest and ramp-up/ramp-down phases.
+    """
+    rest_samples = int(fs * rest_duration)
+    ramp_samples = int(fs * ramp_duration)
+
+    # Build the active movement segment (aligns with the effort hold phase)
+    segments = []
+    for i in range(len(waypoint_angles)):
+        hold_samps = int(fs * waypoint_holds[i])
+        if hold_samps > 0:
+            segments.append(np.full(hold_samps, float(waypoint_angles[i])))
+        if i < len(waypoint_speeds):
+            n_travel = max(2, round(abs(waypoint_angles[i + 1] - waypoint_angles[i]) / waypoint_speeds[i] * fs))
+            segments.append(np.linspace(waypoint_angles[i], waypoint_angles[i + 1], n_travel))
+
+    movement = np.concatenate(segments) if segments else np.array([float(waypoint_angles[0])])
+
+    # Angle stays at the starting position (0) during rest and ramp phases
+    one_cycle = np.concatenate([
+        np.zeros(rest_samples),  # pre-rest
+        np.zeros(ramp_samples),  # effort ramp-up
+        movement,                # active movement during effort hold
+        np.zeros(ramp_samples),  # effort ramp-down
+        np.zeros(rest_samples),  # post-rest
+    ])
+
     profile = np.tile(one_cycle, n_reps)
     profile = _adjust_length(profile, samples, fs)
     min_angle, max_angle = _get_angle_range(movement_dof)
