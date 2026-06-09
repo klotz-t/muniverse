@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "muniverse"
-version = "0.0.1.dev2"
+dynamic = ["version"]
 description = "A modular framework for simulated and experimental EMG dataset generation, motor unit decomposition algorithm benchmarking, and performance evaluation"
 readme = "readme.md"
 requires-python = ">=3.11"
@@ -12,8 +12,8 @@ license = { text = "GPLv3" }
 authors = [
     { name = "Pranav Mamidanna", email = "p.mamidanna22@imperial.ac.uk" },
     { name = "Thomas Klotz", email = "thomas.klotz@imsb.uni-stuttgart.de" },
-    { name = "Dimitrios Halatsis" },
-    { name = "Irene Mendez Guerra" }
+    { name = "Dimitrios Halatsis", email = ""},
+    { name = "Irene Mendez Guerra" email = ""}
 ]
 
 dependencies = [
@@ -52,6 +52,9 @@ include = ["muniverse*"]
 [tool.setuptools.package-data]
 "muniverse.datasets" = ["*.sh", "*.json"]
 "muniverse.algorithms" = ["*.sh", "*.json"]
+
+[tool.setuptools.dynamic]
+version = {attr = "muniverse.__version__"}
 
 [tool.black]
 line-length = 88

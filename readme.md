@@ -140,6 +140,13 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+## Contributors 
+
+- [Pranav Mamidanna](https://github.com/pranavm19)
+- [Thomas Klotz](https://github.com/klotz-t)
+- [Dimitrios Halatsis](https://github.com/dhalatsis)
+- [Irene Mendez Guerra](https://github.com/imendezguerra)
+
 ## Acknowledgments
 
 - **NeuroMotion** - Biomechanical simulation framework ([GitHub](https://github.com/shihan-ma/NeuroMotion))
