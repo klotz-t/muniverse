@@ -192,7 +192,7 @@ def get_events_tsv(requested_path, fsamp, mvc_level, duration_precision=1):
 # --------  Dataset-level metadata --------- #
 # ------------------------------------------ #
 
-metadatapath = str(Path(__file__).parent.parent) + '/bids_metadata/' 
+metadatapath = str(Path.home()) + '/Documents/CBM/github/muniverse-demo/bids_metadata/' 
 
 with open(metadatapath + 'grison_et_al_2025.json', 'r') as f:
     manual_metadata = json.load(f)
@@ -301,11 +301,36 @@ dataset_sidecar = manual_metadata["DatasetDescription"] #dataset_sidecar_templat
 dataset_sidecar["GeneratedBy"][0]["Version"] = __version__
 dataset_sidecar["GeneratedBy"][0]["License"] = __license__
 
-Grison_2025 = bids_dataset(datasetname='Grison_et_al_2025', root=str(Path.home()) + '/Downloads/')
+# Handle the data and metadata of the BIDS dataset
+Grison_2025 = BIDSDataset(
+    datasetname='Grison_et_al_2025', 
+    path=str(Path.home()) + '/Downloads/'
+)
+Grison_2025.set_default_participant_sidecar()
 Grison_2025.set_metadata(field_name='subjects_data', source=subjects_data)
 Grison_2025.set_metadata(field_name='dataset_sidecar', source=dataset_sidecar)
 Grison_2025.readme = readme
 Grison_2025.write()
+
+# Init the derivative
+Grison_2025_labels = BIDSDataset(
+    root=Grison_2025.root + 'derivatives/manual/',
+    datasetname='Grison_et_al_2025',
+    readme=""
+)
+derivative_sidecar = {
+    "Name": "Manual Outputs",
+    "BIDSVersion": Grison_2025_labels._get_bids_version(),
+    "DatasetType": "derivative",
+    "GeneratedBy": [
+        {
+            "Name": "Manual",
+            "Description": "Semi-automated expert-curated reference decomposition based on invasive EMG"
+        }
+    ]
+}
+Grison_2025_labels.set_metadata(field_name="dataset_sidecar", source=derivative_sidecar)
+Grison_2025_labels.write()
 
 # ------------------------------------------ #
 # -------  Loop over all recordings -------- #
@@ -379,7 +404,7 @@ for i in np.arange(n_sub):
             events = get_events_tsv(target_k, fsamp, mvc_level)
 
             # Make a recording and add data and metadata
-            emg_recording = bids_emg_recording(
+            emg_recording = EMGBIDSRecording(
                 parent_dataset=Grison_2025,
                 subject_label=str(i+1).zfill(2), 
                 task_label=task_label, 
@@ -392,22 +417,22 @@ for i in np.arange(n_sub):
             emg_recording.set_metadata(field_name='electrodes', source=el_metadata) 
             emg_recording.set_metadata(field_name='emg_sidecar', source=emg_sidecar)
             emg_recording.set_metadata(field_name='coord_sidecar', source=coordsystem_metadata, overwrite=True)
-            emg_recording.set_data(field_name='emg_data', mydata=data_k,fsamp=emg_sidecar['SamplingFrequency'])
+            emg_recording.set_data(field_name='data', mydata=data_k,fsamp=emg_sidecar['SamplingFrequency'])
             emg_recording.set_metadata(field_name="events_sidecar", source=events_sidecar)
             emg_recording.set_metadata(field_name="events", source=events)
 
             emg_recording.write()
 
             # Add the annotaed spike labels
-            ref_labels = bids_decomp_derivatives(
-                parent_recording=emg_recording,
-                pipelinename="Manual",
-                format="subdir",
+            ref_labels = BIDSDecompositionDerivative(
                 inherited_metadata=["events.json"],
-                inherited_level=["subject"]
+                inherited_level=["subject"],
+                root=Grison_2025_labels.root,
+                subject_label=str(i+1).zfill(2), 
+                task_label=task_label, 
+                run_label=str(k+1).zfill(2),
+                datatype="emg"
             )
-            pipeline_desc = "Semi-automated expert-curated reference decomposition based on invasive EMG"
-            ref_labels.dataset_sidecar["GeneratedBy"][0]["Description"] = pipeline_desc
             # Load data and reformat it to BIDS events format
             fname =  f"{sourcepath}{mvc_levels[j]}/{mvc_levels[j]}_spike_times.csv"
             label_df = pd.read_csv(fname)
@@ -422,6 +447,7 @@ for i in np.arange(n_sub):
                 pass
             else:
                 ref_labels.add_spikes(label_df, fsamp=fsamp)
+                ref_labels.set_default_events_sidecar()
                 ref_labels.write()
 
             phase = phase + 1
