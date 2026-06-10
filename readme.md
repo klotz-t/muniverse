@@ -142,8 +142,8 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ## Contributors 
 
-- [Pranav Mamidanna](https://github.com/pranavm19)
-- [Thomas Klotz](https://github.com/klotz-t)
+- [Pranav Mamidanna](https://github.com/pranavm19), [:email:](p.mamidanna22@imperial.ac.uk)
+- [Thomas Klotz](https://github.com/klotz-t), [:email:](thomas.klotz@imsb.uni-stuttgart.de)
 - [Dimitrios Halatsis](https://github.com/dhalatsis)
 - [Irene Mendez Guerra](https://github.com/imendezguerra)
 
@@ -176,7 +176,7 @@ If you use MUniverse in your research, please cite:
 
 For questions, issues, or contributions, please:
 - Open an issue on [GitHub](https://github.com/dfarinagroup/muniverse/issues)
-- Contact the maintainers via email (see `pyproject.toml` for author emails)
+- Contact the maintainers via email (see the *Contributors section* for author emails)
 
 ### License
 

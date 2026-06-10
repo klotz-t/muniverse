@@ -13,8 +13,17 @@ readme = "readme.md"
 requires-python = ">=3.11"
 license = { text = "GPLv3" }
 authors = [
-    { name = "Pranav Mamidanna", email = "p.mamidanna22@imperial.ac.uk" },
-    { name = "Thomas Klotz", email = "thomas.klotz@imsb.uni-stuttgart.de" },
+    { name = "Pranav Mamidanna"},
+    { name = "Thomas Klotz"},
+    { name = "Dimitrios Halatsis"},
+    { name = "Irene Mendez Guerra"}
+]
+keywords = [
+    "EMG", 
+    "motor unit idendification", 
+    "blind source separation", 
+    "validation", 
+    "benchmarking"
 ]
 
 dependencies = [
