@@ -394,13 +394,12 @@ class AlgorithmLogger(BaseMetadataLogger):
         muniverse_info = self._get_git_info(str(package_root))
         self.add_generated_by(
             name="MUniverse",
-            version=__version__,
             url=muniverse_info["URL"],
             commit=muniverse_info["Commit"],
             branch=muniverse_info["Branch"],
             file="src/muniverse/algorithms/decomposition.py",
-            license=metadata("muniverse")["license"],
-            version=metadata("muniverse")["version"]
+            version= metadata("muniverse")["version"],
+            license= metadata("muniverse")["license"] 
         )
 
     def set_input_data(self, file_name: str, file_format: str):
