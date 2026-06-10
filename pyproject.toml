@@ -12,8 +12,6 @@ license = { text = "GPLv3" }
 authors = [
     { name = "Pranav Mamidanna", email = "p.mamidanna22@imperial.ac.uk" },
     { name = "Thomas Klotz", email = "thomas.klotz@imsb.uni-stuttgart.de" },
-    { name = "Dimitrios Halatsis", email = ""},
-    { name = "Irene Mendez Guerra" email = ""}
 ]
 
 dependencies = [
@@ -53,8 +51,7 @@ include = ["muniverse*"]
 "muniverse.datasets" = ["*.sh", "*.json"]
 "muniverse.algorithms" = ["*.sh", "*.json"]
 
-[tool.setuptools.dynamic]
-version = {attr = "muniverse.__version__"}
+[tool.setuptools_scm]
 
 [tool.black]
 line-length = 88

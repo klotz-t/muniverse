@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, Optional, Tuple, Union, Literal
+from importlib.metadata import metadata
 
 import numpy as np
 import pandas as pd
@@ -115,7 +116,7 @@ def decompose_scd(
             )
         logger.add_generated_by(
             name="Swarm Contrastive Decomposition",
-            version=scd.__version__,
+            version=metadata("scd")["version"],
             url="https://github.com/AgneGris/swarm-contrastive-decomposition.git",
             commit="n/a", 
             license="Creative Commons Attribution-NonCommercial 4.0 International Public License",

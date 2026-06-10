@@ -12,6 +12,7 @@ from muniverse import __version__, __license__
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from importlib.metadata import metadata
 
 
 class BaseMetadataLogger:
@@ -261,7 +262,7 @@ class BaseMetadataLogger:
                 "Name": "Muniverse",
                 "URL": "https://github.com/dfarinagroup/muniverse.git",  # TODO: Replace with final URL
                 "Branch": "main",
-                "Commit": "unknown",
+                "Commit": "n/a"
             }
 
     def add_generated_by(
@@ -332,8 +333,8 @@ class SimulationLogger(BaseMetadataLogger):
             commit=muniverse_info["Commit"],
             branch=muniverse_info["Branch"],
             file="src/muniverse/data_generation/generate_data.py",
-            version= __version__,
-            license= __license__, 
+            version= metadata("muniverse")["version"],
+            license= metadata("muniverse")["license"], 
         )
 
         # Add NeuroMotion generator info
@@ -398,7 +399,8 @@ class AlgorithmLogger(BaseMetadataLogger):
             commit=muniverse_info["Commit"],
             branch=muniverse_info["Branch"],
             file="src/muniverse/algorithms/decomposition.py",
-            license=__license__,
+            license=metadata("muniverse")["license"],
+            version=metadata("muniverse")["version"]
         )
 
     def set_input_data(self, file_name: str, file_format: str):
