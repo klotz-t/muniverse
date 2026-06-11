@@ -116,13 +116,13 @@ All datasets are hosted on [Harvard Dataverse](https://dataverse.harvard.edu/dat
 muniverse/
 ├── src/                    # Package source code
 │   └── muniverse/
+│       ├── configs/        # Algorithm and dataset configurations
 │       ├── datasets/       # Dataset loading and simulation utilities
 │       ├── algorithms/     # Decomposition algorithms
 │       ├── evaluation/     # Performance evaluation
 │       └── utils/          # Utility functions
 ├── notebooks/              # Tutorial notebooks
 ├── scripts/                # Utility scripts
-├── configs/                # Algorithm and dataset configurations
 ├── docker/                 # Docker container definitions
 ├── docs/                   # GitHub Pages documentation (Coming soon!)
 ├── tests/                  # Unit tests
