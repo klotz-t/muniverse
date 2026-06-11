@@ -142,8 +142,8 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ## Contributors 
 
-- [Pranav Mamidanna](https://github.com/pranavm19), [:email:](p.mamidanna22@imperial.ac.uk)
-- [Thomas Klotz](https://github.com/klotz-t), [:email:](thomas.klotz@imsb.uni-stuttgart.de)
+- [Pranav Mamidanna](https://github.com/pranavm19), [📧](mailto:p.mamidanna22@imperial.ac.uk)
+- [Thomas Klotz](https://github.com/klotz-t), [📧](mailto:thomas.klotz@imsb.uni-stuttgart.de)
 - [Dimitrios Halatsis](https://github.com/dhalatsis)
 - [Irene Mendez Guerra](https://github.com/imendezguerra)
 
