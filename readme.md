@@ -6,7 +6,7 @@
 MUniverse is a modular framework for **simulated and experimental EMG dataset generation**, **motor unit decomposition algorithm benchmarking**, and **performance evaluation**. It integrates biomechanical simulation (via *NeuroMotion*), generative models (*BioMime*), standardized formats (e.g. BIDS/Croissant), and FAIR data hosting (Harvard Dataverse).
 
 <p align="center">
-  <img src="docs/static/images/muniverse.png" alt="MUniverse overview" width="600"/>
+  <img src="https://github.com/dfarinagroup/muniverse/blob/main/docs/static/images/muniverse.png" alt="MUniverse overview" width="600"/>
 </p>
 
 ## Features
