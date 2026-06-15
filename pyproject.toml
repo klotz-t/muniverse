@@ -6,7 +6,7 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "muniverse"
+name = "muniverse-emg"
 dynamic = ["version"]
 description = "A modular framework for simulated and experimental EMG dataset generation, motor unit decomposition algorithm benchmarking, and performance evaluation"
 readme = "readme.md"
@@ -18,6 +18,7 @@ authors = [
     { name = "Dimitrios Halatsis"},
     { name = "Irene Mendez Guerra"}
 ]
+
 keywords = [
     "EMG", 
     "motor unit idendification", 
