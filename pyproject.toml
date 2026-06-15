@@ -6,7 +6,7 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "muniverse-emg"
+name = "muniverse"
 dynamic = ["version"]
 description = "A modular framework for simulated and experimental EMG dataset generation, motor unit decomposition algorithm benchmarking, and performance evaluation"
 readme = "readme.md"
@@ -25,17 +25,6 @@ keywords = [
     "validation", 
     "benchmarking"
 ]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Programming Language :: Python",
-    "Topic :: Scientific/Engineering",
-    "Topic :: Scientific/Engineering :: Medical Science Apps.",
-    "Topic :: Scientific/Engineering :: Human Machine Interfaces",
-]
-
-[project.urls]
-Documentation = "https://dfarinagroup.github.io/muniverse/"
-Repository = "https://github.com/dfarinagroup/muniverse.git"
 
 dependencies = [
     "numpy",
@@ -104,3 +93,15 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v --cov=src/muniverse" 
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Topic :: Scientific/Engineering :: Human Machine Interfaces",
+]
+
+[project.urls]
+Documentation = "https://dfarinagroup.github.io/muniverse/"
+Repository = "https://github.com/dfarinagroup/muniverse.git"
