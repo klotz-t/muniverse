@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, Optional, Tuple, Union, Literal
+from importlib.metadata import metadata
+from importlib.resources import files
 
 import numpy as np
 import pandas as pd
@@ -31,7 +33,7 @@ try:
     import scd as scd
     import torch
 except ImportError:
-    scd is None
+    scd = None
 
 
 def load_config(config_path: str) -> Dict[str, Any]:
@@ -45,7 +47,7 @@ def decompose_scd(
     algorithm_config: Optional[Dict] = None,
     engine: Literal["local", "docker", "singularity"] = "singularity",
     container: str = "environment/muniverse_scd.sif",
-    metadata: Optional[Dict] = None
+    meta: Optional[Dict] = None
 ) -> Tuple[Dict, Dict]:
     """
     API to run SCD decomposition using a container or a local installation.
@@ -68,8 +70,8 @@ def decompose_scd(
         container : str
              Path to container image
 
-        metadata: dict 
-            Optional dictionary containing metadata for logging
+        meta: dict 
+            Optional dictionary containing metadata for loging
 
 
     Returns
@@ -115,7 +117,7 @@ def decompose_scd(
             )
         logger.add_generated_by(
             name="Swarm Contrastive Decomposition",
-            version=scd.__version__,
+            version=metadata("scd")["version"],
             url="https://github.com/AgneGris/swarm-contrastive-decomposition.git",
             commit="n/a", 
             license="Creative Commons Attribution-NonCommercial 4.0 International Public License",
@@ -134,8 +136,8 @@ def decompose_scd(
     
 
     # Set input data information
-    if metadata:
-        logger.set_input_data(file_name=metadata["filename"], file_format=metadata["format"])
+    if meta:
+        logger.set_input_data(file_name=meta["filename"], file_format=meta["format"])
     else:
         logger.set_input_data(file_name="numpy_array", file_format="npy")
 
@@ -234,7 +236,7 @@ def decompose_upperbound(
     muaps: np.ndarray,
     fsamp: float,
     algorithm_config: Optional[Dict] = None,
-    metadata: Optional[Dict] = None,
+    meta: Optional[Dict] = None,
 ) -> Tuple[Dict, Dict]:
     """
     Run upperbound decomposition.
@@ -253,8 +255,8 @@ def decompose_upperbound(
         algorithm_config : dict (Optional) 
             Dictonary with the pipeline configuration
 
-        metadata: dict (Optional)
-            Optional dictionary containing input data metadata for logging
+        meta: dict (Optional)
+            Optional dictionary containing input data metadata for loging
 
     Returns
     -------
@@ -279,8 +281,8 @@ def decompose_upperbound(
     logger.log_data["Pipeline"]["Description"] = "Upper bound prediction for linear motor unit identification algorithms"
     
     # Set input data information
-    if metadata:
-        logger.set_input_data(file_name=metadata["filename"], file_format=metadata["format"])
+    if meta:
+        logger.set_input_data(file_name=meta["filename"], file_format=meta["format"])
     else:
         logger.set_input_data(file_name="numpy_array", file_format="npy")
 
@@ -290,13 +292,14 @@ def decompose_upperbound(
         logger.set_algorithm_config(algo_cfg)
     else:
         # Load default configuration
-        config_dir = Path(__file__).parent.parent.parent.parent / "configs"
-        algorithm_config_path = config_dir / "upperbound.json"
-        if not algorithm_config_path.exists():
+        # config_dir = Path(__file__).parent.parent.parent.parent / "configs"
+        # algorithm_config_path = config_dir / "upperbound.json"
+        config_path = files("muniverse").joinpath("configs/upperbound.json")
+        if not config_path.is_file():
             raise FileNotFoundError(
-                f"Default UpperBound config not found at {algorithm_config_path}"
+                f"Default config file for upperbound method not found"
             )
-        algo_cfg = load_config(str(algorithm_config_path))
+        algo_cfg = load_config(str(config_path))
         logger.set_algorithm_config(algo_cfg)
 
 
@@ -414,7 +417,7 @@ def decompose_cbss(
     data: np.ndarray,
     fsamp: float,
     algorithm_config: Optional[Dict] = None,
-    metadata: Optional[Dict] = None,
+    meta: Optional[Dict] = None,
 ) -> Tuple[Dict, Dict, FastIcaCBSS]:
     """
     API to run a CBSS decomposition pipeline with optional
@@ -431,7 +434,7 @@ def decompose_cbss(
         algorithm_config : dict (Optional) 
             Dictonary with the pipeline configuration
 
-        metadata: dict (Optional)
+        meta: dict (Optional)
             Optional dictionary containing input data metadata for logging
 
     Returns
@@ -458,8 +461,8 @@ def decompose_cbss(
     logger.log_data["Pipeline"]["Description"] = "Motor unit identification algorithm"
 
     # Set input data information
-    if metadata:
-        logger.set_input_data(file_name=metadata["filename"], file_format=metadata["format"])
+    if meta:
+        logger.set_input_data(file_name=meta["filename"], file_format=meta["format"])
     else:
         logger.set_input_data(file_name="numpy_array", file_format="npy")
 
@@ -549,7 +552,7 @@ def decompose_ae(
     data: np.ndarray,
     fsamp: float,
     algorithm_config: Optional[Dict] = None,
-    metadata: Optional[Dict] = None,
+    meta: Optional[Dict] = None,
 ) -> Tuple[Dict, Dict]:
     """
     Run Autoencoder-based decomposition.
@@ -565,7 +568,7 @@ def decompose_ae(
         algorithm_config : dict (Optional) 
             Dictonary with the pipeline configuration
 
-        metadata: dict (Optional)
+        meta: dict (Optional)
             Optional dictionary containing input data metadata for logging
 
     Returns
@@ -592,10 +595,10 @@ def decompose_ae(
     logger.log_data["Pipeline"]["Description"] = "Motor unit identification algorithm"
 
     # Input data metadata
-    if metadata:
+    if meta:
         logger.set_input_data(
-            file_name=metadata.get("filename", "numpy_array"),
-            file_format=metadata.get("format", "npy"),
+            file_name=meta.get("filename", "numpy_array"),
+            file_format=meta.get("format", "npy"),
         )
     else:
         logger.set_input_data(file_name="numpy_array", file_format="npy")
@@ -686,13 +689,14 @@ def _get_config(cfg, method):
         algo_cfg = load_config(str(cfg))
     else:
         # Load default configuration
-        config_dir = Path(__file__).parent.parent.parent.parent / "configs"
-        default_config = config_dir / f"{method}.json"
-        if not default_config.exists():
+        # config_dir = Path(__file__).parent.parent.parent.parent / "configs"
+        # default_config = config_dir / f"{method}.json"
+        config_path = files("muniverse").joinpath(f"configs/{method}.json")
+        if not config_path.is_file():
             raise FileNotFoundError(
-                f"Default SCD config not found at {default_config}"
+                f"Default config file for method = {method} not found"
             )
-        algo_cfg = load_config(str(default_config))
+        algo_cfg = load_config(str(config_path))
 
     return algo_cfg
 

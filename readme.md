@@ -6,7 +6,7 @@
 MUniverse is a modular framework for **simulated and experimental EMG dataset generation**, **motor unit decomposition algorithm benchmarking**, and **performance evaluation**. It integrates biomechanical simulation (via *NeuroMotion*), generative models (*BioMime*), standardized formats (e.g. BIDS/Croissant), and FAIR data hosting (Harvard Dataverse).
 
 <p align="center">
-  <img src="docs/static/images/muniverse.png" alt="MUniverse overview" width="600"/>
+  <img src="https://github.com/dfarinagroup/muniverse/blob/main/docs/static/images/muniverse.png" alt="MUniverse overview" width="600"/>
 </p>
 
 ## Features
@@ -116,13 +116,13 @@ All datasets are hosted on [Harvard Dataverse](https://dataverse.harvard.edu/dat
 muniverse/
 ├── src/                    # Package source code
 │   └── muniverse/
+│       ├── configs/        # Algorithm and dataset configurations
 │       ├── datasets/       # Dataset loading and simulation utilities
 │       ├── algorithms/     # Decomposition algorithms
 │       ├── evaluation/     # Performance evaluation
 │       └── utils/          # Utility functions
 ├── notebooks/              # Tutorial notebooks
 ├── scripts/                # Utility scripts
-├── configs/                # Algorithm and dataset configurations
 ├── docker/                 # Docker container definitions
 ├── docs/                   # GitHub Pages documentation (Coming soon!)
 ├── tests/                  # Unit tests
@@ -139,6 +139,13 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+## Contributors 
+
+- [Pranav Mamidanna](https://github.com/pranavm19), [📧](mailto:p.mamidanna22@imperial.ac.uk)
+- [Thomas Klotz](https://github.com/klotz-t), [📧](mailto:thomas.klotz@imsb.uni-stuttgart.de)
+- [Dimitrios Halatsis](https://github.com/dhalatsis)
+- [Irene Mendez Guerra](https://github.com/imendezguerra)
 
 ## Acknowledgments
 
@@ -169,7 +176,7 @@ If you use MUniverse in your research, please cite:
 
 For questions, issues, or contributions, please:
 - Open an issue on [GitHub](https://github.com/dfarinagroup/muniverse/issues)
-- Contact the maintainers via email (see `pyproject.toml` for author emails)
+- Contact the maintainers via email (see the *Contributors section* for author emails)
 
 ### License
 
