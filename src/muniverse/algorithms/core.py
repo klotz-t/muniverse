@@ -713,10 +713,10 @@ def peel_off(
         fsamp : float , default 2048
             Sampling frequency in Hz
         method : {"sparse", "fft_conv"}  
-            Method used for peel of. If "sparse", the function
-            loops over all spikes and inserts a the waveform
-            reconstructed from spike-triggered averaging. If 
-            "fft_conv" the signal is reconstructed by convolving
+            Method used for peel-of. If "sparse" (default), 
+            the function loops over all spikes and inserts a 
+            the waveform reconstructed from spike-triggered averaging. 
+            If "fft_conv" the signal is reconstructed by convolving
             (fft-based) the waveform with the spike train.  
 
     Returns
