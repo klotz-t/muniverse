@@ -270,7 +270,7 @@ class BaseMetadataLogger:
             }
         except subprocess.CalledProcessError:
             return {
-                "Name": "Muniverse",
+                "Name": "MUniverse",
                 "URL": "https://github.com/dfarinagroup/muniverse.git",  # TODO: Replace with final URL
                 "Branch": "main",
                 "Commit": "n/a"
@@ -346,6 +346,7 @@ class SimulationLogger(BaseMetadataLogger):
             file="src/muniverse/data_generation/generate_data.py",
             version= metadata("muniverse-emg")["version"],
             license= metadata("muniverse-emg")["license"],
+            description=metadata("muniverse-emg")["Summary"],
         )
 
         # Add NeuroMotion generator info
@@ -410,7 +411,8 @@ class AlgorithmLogger(BaseMetadataLogger):
             branch=muniverse_info["Branch"],
             file="src/muniverse/algorithms/decomposition.py",
             version= metadata("muniverse-emg")["version"],
-            license= metadata("muniverse-emg")["license"]
+            license= metadata("muniverse-emg")["license"],
+            description=metadata("muniverse-emg")["Summary"],
         )
 
     def set_input_data(self, file_name: str, file_format: str):
