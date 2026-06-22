@@ -282,6 +282,11 @@ def label_sources(
 
     """
 
+    if "event_type" in df.columns:
+        df = df[
+            df["event_type"] == "motor-unit-spike"
+        ]
+
     if t_end == -1:
         t_end = df["onset"].max() + 0.1
 
@@ -404,7 +409,7 @@ def pseudo_sil_score(
     ----
         source : np.ndarray 
             The predicted spiky source signal
-        redicted_spikes : np.ndarray 
+        predicted_spikes : np.ndarray 
             Indices of predicted spike times
         fsamp : float 
             Sampling frequency in Hz
@@ -586,7 +591,7 @@ def evaluate_spike_matches(
         fsamp : float 
             Sampling rate (in Hz) of the binary spike train
 
-        theshold : float , default 0.3
+        threshold : float , default 0.3
             Common sources need to have a matching score higher than the theshold
 
         mask : np.ndarray of bool | None , default None
@@ -602,10 +607,19 @@ def evaluate_spike_matches(
 
     """
 
+    if "event_type" in df1.columns:
+        df1 = df1[
+            df1["event_type"] == "motor-unit-spike"
+        ]
+    if "event_type" in df2.columns:
+        df2 = df2[
+            df2["event_type"] == "motor-unit-spike"
+        ]    
+
     if t_end == -1:
         t_end = max(
                 df1["onset"].max(), df2["onset"].max()
-            )  + 0.1
+            )  + 0.1    
 
     source_labels_1 = sorted(df1["unit_id"].unique())
     source_labels_2 = sorted(df2["unit_id"].unique())

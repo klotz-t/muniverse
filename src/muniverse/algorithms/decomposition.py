@@ -112,23 +112,26 @@ def decompose_scd(
     if engine == "local":
         if scd is None:
             raise ImportError(
-                "The scd package is not installed locally."
-                "If engine is 'local' scd needs to be installed or run it from a container."
+                "The 'swarm-contrastive-decomposition' package is not installed locally."
+                "Make a local installation or run SCD in a container."
             )
         logger.add_generated_by(
             name="Swarm Contrastive Decomposition",
             version=metadata("swarm-contrastive-decomposition")["version"],
+            description=metadata("swarm-contrastive-decomposition")["Summary"],
             url="https://github.com/AgneGris/swarm-contrastive-decomposition.git",
             commit="n/a", 
-            license="Creative Commons Attribution-NonCommercial 4.0 International Public License",
+            license=metadata("swarm-contrastive-decomposition")["license"],
         )
   
     elif engine in ["docker", "singularity"]:
         logger.add_generated_by(
             name="Swarm Contrastive Decomposition",
+            version="0.1.0",
+            description="Decomposition of Neurophysiological Time Series Signals with a Particle Swarm Optimised Independence Estimator",
             url="https://github.com/AgneGris/swarm-contrastive-decomposition.git",
             commit="632a9ad041cf957584926d6b5cc64b7fe741e9eb",
-            license="Creative Commons Attribution-NonCommercial 4.0 International Public License",
+            license="CC-BY-NC-4.0",
             container=logger._get_container_info(engine, container),
         )
     else:
