@@ -282,6 +282,11 @@ def label_sources(
 
     """
 
+    if "event_type" in df.columns:
+        df = df[
+            df["event_type"] == "motor-unit-spike"
+        ]
+
     if t_end == -1:
         t_end = df["onset"].max() + 0.1
 
@@ -404,7 +409,7 @@ def pseudo_sil_score(
     ----
         source : np.ndarray 
             The predicted spiky source signal
-        redicted_spikes : np.ndarray 
+        predicted_spikes : np.ndarray 
             Indices of predicted spike times
         fsamp : float 
             Sampling frequency in Hz
