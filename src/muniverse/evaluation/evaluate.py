@@ -586,7 +586,7 @@ def evaluate_spike_matches(
         fsamp : float 
             Sampling rate (in Hz) of the binary spike train
 
-        theshold : float , default 0.3
+        threshold : float , default 0.3
             Common sources need to have a matching score higher than the theshold
 
         mask : np.ndarray of bool | None , default None
