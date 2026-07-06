@@ -787,4 +787,132 @@ class FastIcaCBSS(_BaseCBSS):
         
         return G
     
+class OnlineIcaCBSS(_BaseCBSS):
+
+    def __init__(
+            self, 
+            random_seed: int = 1909,
+            ext_fact: int = 12,
+            whitening_method: Literal["ZCA", "PCA", "Cholesky"] = "ZCA",
+            whitening_backend: Literal["ed", "svd"] = "ed",
+            whitening_reg: str | float | None = "auto",
+            whitening_eps: float = 1e-10,
+            spike_detection_exp: float = 2,
+            spike_detection_min_delay: float = 0.01,
+            #spike_cluster_method: Literal["kmeans"] = "kmeans",
+            ica_opt_fun_exp: float = 3,
+            ica_opt_fun_eps: float = 1e-3,
+            batch_size: float = 1,
+            learning_rate: float = 1e-3,
+            verbose: bool = True,
+            config: dict | None = None, 
+        ):
+
+        super().__init__(
+            ext_fact = ext_fact,
+            whitening_method = whitening_method,
+            whitening_backend = whitening_backend, 
+            whitening_reg = whitening_reg,
+            whitening_eps = whitening_eps,
+            spike_detection_exp = spike_detection_exp,
+            spike_detection_min_delay = spike_detection_min_delay,
+            verbose = verbose
+        )
+
+        self.random_seed = random_seed
+        self.ica_opt_fun_exp = ica_opt_fun_exp
+        self.ica_opt_fun_eps = ica_opt_fun_eps
+        self.batch_size = batch_size
+        self.learning_rate = learning_rate
+
+        # Convert config object (if provided) to a dictionary
+        config_dict = vars(config) if config is not None else {}
+
+        self._params = set(self.__dict__.keys()) - {"_params"} - {"_attributes"}
+
+        # Set all parameters from the config dict
+        for key, value in config_dict.items():
+            if key in self._params:
+                setattr(self, key, value)
+            else:
+                print(f"Warning: ignoring invalid parameter: {key}")
+
+        self._attributes = set([
+            "unmixing_weights_", "whiten_", "unwhiten_"
+        ])    
+
+    def fit_predict(
+            self, 
+            sig: np.ndarray,
+            fsamp: float,
+            weights: np.ndarray,
+            whiten: np.ndarray | None = None 
+    ):
+        
+        # Convert data to the desired precision
+        sig = np.asarray(sig, dtype=np.float64)
+
+        # Number of segments
+        n_batch = sig.shape[1] // self.batch_size + 1
+
+        # Extend signals and subtract the mean and cut the edges
+        ext_sig = self._extension(sig)
+
+        # Whiten the signal
+        if whiten is None:
+            white_sig = self._whitening(ext_sig)
+        else:
+            self.whiten_ = whiten
+            white_sig = self.whiten_ @ ext_sig
+
+        # Init internals
+        self.unmixing_weights_ = np.zeros(
+            (weights.shape[0], weights.shape[1], n_batch + 1)
+        )
+        sources = np.zeros((weights.shape[1], sig.shape[1]))   
+
+        self.unmixing_weights_[:, :, 0] = weights 
+
+        start = 0
+        end = self.batch_size // fsamp
+
+
+        for i in range(self.batch_size):
+
+            X = white_sig[:, start:end]
+            W = self.unmixing_weights_[:, :, i]
+
+            for j in range(weights.shape[1]):
+
+                w_old = W[:, j]
+                w_new = self._gradient_step(w_old, X)
+                self.unmixing_weights_[:, j, i+1] = w_new
+                sources[j, start:end] = w_new.T @ X
+
+                continue
+
+            start = end 
+            end += self.batch_size // fsamp
+
+        return
+
+    def _gradient_step(self, w, X):
+        """Gradient update for an unmxing weight""" 
+
+        wTX = w.T @ X 
+        g = (
+            (self.ica_opt_fun_eps + wTX**2) ** ((self.ica_opt_fun_exp - 3) / 2) 
+            * (self.ica_opt_fun_exp * wTX**2 + self.ica_opt_fun_eps)
+        )
+
+        # Ordinary gradient / weighted average direction
+        mu_xg = (X @ g.T) / X.shape[1]
+        # Projection on the direction of w
+        mu_yg = w @ mu_xg
+        # Natural gradient (othogonal to w)
+        grad = mu_xg - w * mu_yg
+        # Single unit update rule
+        w_new = w + self.learning_rate * grad   
+
+        return w_new   
        
