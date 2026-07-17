@@ -711,7 +711,19 @@ def _run_scd_local(data, cfg):
         fsamp = cfg["sampling_frequency"]
         device = "cuda" if torch.cuda.is_available() else "cpu"
         cfg["device"] = device
-        config = scd.Config(**cfg)
+        print(f"Running SCD on hardware: {device}")
+
+        valid_fields = scd.Config().__dataclass_fields__.keys()
+
+        unknown_fields = set(cfg) - valid_fields
+        if unknown_fields:
+            print(f"Ignoring unknown fields: {unknown_fields}")
+        filtered_cfg = {
+            k: v for k, v in cfg.items()
+            if k in valid_fields
+        }
+
+        config = scd.Config(**filtered_cfgl)
         seed = cfg.get("Seed", 42)
         scd.set_random_seed(seed=seed)
 
