@@ -723,7 +723,7 @@ def _run_scd_local(data, cfg):
             if k in valid_fields
         }
 
-        config = scd.Config(**filtered_cfgl)
+        config = scd.Config(**filtered_cfg)
         seed = cfg.get("Seed", 42)
         scd.set_random_seed(seed=seed)
 
