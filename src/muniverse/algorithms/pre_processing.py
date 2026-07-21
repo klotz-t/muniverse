@@ -513,10 +513,11 @@ class PreProcessEMG:
                         max_iter=step.max_iter,
                         mode=step.mode
                     )
+                    new_true = bad_mask & ch_mask
                     ch_mask = ch_mask & ~bad_mask
                     ch_status.loc[bad_mask, "status"] = "off"
                     ch_status.loc[
-                        bad_mask, "status_description"
+                        new_true, "status_description"
                     ] = step.description
                     ch_status[step.metric] = scores
                 elif isinstance(step, self.Downsample):
