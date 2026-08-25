@@ -75,10 +75,10 @@ class _BaseCBSS():
         """
         Update parameters given an arbitary list of key value pairs
 
-        Args
-        ----
-            **kwargs
-                Parsed parameteters
+        Parameters
+        ----------
+        **kwargs
+            Parsed parameteters
         
         """
         for key, value in kwargs.items():
@@ -140,24 +140,24 @@ class _BaseCBSS():
         Predict motor unit spike trains given multi-channel 
         EMG data using your learned unmixing weights.
 
-        Args
-        ----
-            sig : np.ndarray 
-                Input (EMG) signal (n_channels x n_samples)
+        Parameters
+        ----------
+        sig : np.ndarray 
+            Input (EMG) signal of shape ``(n_channels, n_samples)``
 
-            fsamp : float 
-                Sampling frequency in Hz  
+        fsamp : float 
+            Sampling frequency in Hz  
 
         Returns
         -------
-            spikes : pd.DataFrame 
-                Spike table (columns: onset, duration, sample, unit_id, description)
+        spikes : pd.DataFrame 
+            Spike table with columns: onset, duration, sample, unit_id, description
 
-            sources : np.ndarray 
-                Estimated sources / ica components (n_components x n_samples)
+        sources : np.ndarray 
+            Estimated sources / ica components of shape ``(n_components, n_samples)``
 
-            scores : dict of np.ndarray 
-                Source trustworthiness scores ("sil" and "cov_isi")
+        scores : dict of np.ndarray 
+            Source trustworthiness scores ("sil" and "cov_isi")
         
         """
 
@@ -202,7 +202,12 @@ class _BaseCBSS():
         """"
         Save the model parameters and learned attributes
         for downstream usage
-        
+
+        Returns
+        -------
+        model : dict
+            Dictonary containing all parameters and learned 
+            attributes of the CBSS model
         """
 
         params = {}
@@ -223,12 +228,11 @@ class _BaseCBSS():
         Load a model including both parameters and learned 
         attributes for downstream usage
 
-        Args
-        ----
-            model : dict
-                Dictonary containing all parameters and learned 
-                attributes of the model 
-        
+        Parameters
+        ----------
+        model : dict
+            Dictonary containing all parameters and learned 
+            attributes of the CBSS model 
         """
 
         for key, value in model["parameters"].items():
@@ -245,12 +249,11 @@ class FastIcaCBSS(_BaseCBSS):
     multi-channel EMG data. The algorithm performs the following steps:
 
     - Transform the convolutive mixture into an instantaneous mixture 
-    by adding R delayed copies of the input signal
+    by adding ``(R-1)`` delayed copies of the input signal
     - Apply a whitening transformation to the extended signals to 
     obtain data with unit variance
-    - Sequentially optimize the unmixing weights using the fastICA 
-    algorithm
-        - Run a fixed-point algorithm maximizing non-gaussianity of
+    - Sequentially optimize the unmixing weights:
+        - Run the fastICA fixed-point algorithm to maximize the non-gaussianity of
         the sources
         - Extract the motor unit spikes using peak-detection and 
         kmeans++ based spike clustering
@@ -258,150 +261,154 @@ class FastIcaCBSS(_BaseCBSS):
         learning (optional)
         - Peel-off the contribution of detected sources (optional)
 
-    Properties
+    Parameters
     ----------
 
-        random_seed : int , default 1909 
-            Seed of the random number generator.
+    random_seed : int , default 1909 
+        Seed of the random number generator.
 
-        ext_fact : int , default 12
-            Number of delayed copies in the extended signal
+    ext_fact : int , default 12
+        Number of delayed copies in the extended signal
 
-        whitening_method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
-            Method used for whitening
+    whitening_method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
+        Method used for whitening
 
-        whitening_backend : {"ed", "svd"}, default "ed" 
-            Method used to calculate eigenvalues and eigenvectors. Can be
-            either based on singular value decomposition ("svd") or an
-            eigendecomposition ("ed"). Only needed if method is "ZCA" or "PCA".    
+    whitening_backend : {"ed", "svd"}, default "ed" 
+        Method used to calculate eigenvalues and eigenvectors. Can be
+        either based on singular value decomposition ("svd") or an
+        eigendecomposition ("ed"). Only needed if method is "ZCA" or "PCA".    
 
-        whitening_regularization : {"auto", float, None}, default "auto" 
-            Adds a small value to the eigenvalues for regularization. 
-            If "auto", the mean of the second half of the eigenvalues is used.
+    whitening_regularization : {"auto", float, None}, default "auto" 
+        Adds a small value to the eigenvalues for regularization. 
+        If "auto", the mean of the second half of the eigenvalues is used.
 
-        spike_detection_exp : float , default 2
-            Exponent of asymetric power law applied to the extracted sources
-            before spike detection
-            
-        spike_detection_min_delay : float , default 0.01
-            Minimum distance between two detected spikes in seconds   
+    spike_detection_exp : float , default 2
+        Exponent of asymetric power law applied to the extracted sources
+        before spike detection
+        
+    spike_detection_min_delay : float , default 0.01
+        Minimum distance between two detected spikes in seconds   
 
-        ica_iterations : int , default 100
-            Number of fastICA runs, i.e., maximum number of extracted sources.
+    ica_iterations : int , default 100
+        Number of fastICA runs, i.e., maximum number of extracted sources.
 
-        ica_initalization : {"random", "activity_idx"}, default "random" 
-            Initalization method of the fastICA fixed-point algorithm. 
-            Either drawn from a Gaussian distribution ("random") or using the 
-            time instances with maximum column norms ("activity_idx").
+    ica_initalization : {"random", "activity_idx"}, default "random" 
+        Initalization method of the fastICA fixed-point algorithm. 
+        Either drawn from a Gaussian distribution ("random") or using the 
+        time instances with maximum column norms ("activity_idx").
 
-        ica_opt_fun_exp : float , default 3
-            Exponent a of the loss function g(x)=x * (x^2 + epsilon)^((a-1)/2) 
-            representing a smooth approximation of g(x) = sign(x) * abs(x)**a. 
+    ica_opt_fun_exp : float , default 3
+        Exponent a of the loss function g(x)=x * (x^2 + epsilon)^((a-1)/2) 
+        representing a smooth approximation of g(x) = sign(x) * abs(x)**a. 
 
-        ica_opt_fun_eps : float , default 1e-3
-            Epsilon used in the loss function.    
+    ica_opt_fun_eps : float , default 1e-3
+        Epsilon used in the loss function.    
 
-        ica_max_iter : int , default 100
-            Maximum number of iterations for the fastICA fixed-point algorithm.  
+    ica_max_iter : int , default 100
+        Maximum number of iterations for the fastICA fixed-point algorithm.  
 
-        ica_tol : float , default 5e-4 
-            Convergence criterion for the fastICA fixed-point algorithm. Stops if 
-            the dot product between the current and previous unmixing weights 
-            minus 1 is less than the tolerance value.
+    ica_tol : float , default 5e-4 
+        Convergence criterion for the fastICA fixed-point algorithm. Stops if 
+        the dot product between the current and previous unmixing weights 
+        minus 1 is less than the tolerance value.
 
-        ica_orthogonalization : {"gram-schmidt", "projection_deflation",  None}, default "gram-schmidt"
-            Method used to avoid repeaded convergence to the same source in 
-            the fastICA fixed point algorithm.  
+    ica_orthogonalization : {"gram-schmidt", "projection_deflation",  None}, default "gram-schmidt"
+        Method used to avoid repeaded convergence to the same source in 
+        the fastICA fixed point algorithm.  
 
-        clip_source : bool , default
-            If True, the values of the predicted sources are cliped during the fixed point
-            algorithm. This can help to limit the effect of outliers / artifacts
+    clip_source : bool , default
+        If True, the values of the predicted sources are cliped during the fixed point
+        algorithm. This can help to limit the effect of outliers / artifacts
 
-        clip_method : {"threshold", "prctile"} , default threshold
-            Method used for clipping sources. If "threshold", a fixed value is used.
-            If "prctile" values are cliped at the specified percentile (in percent) 
-            given the distribution of the predcted source. 
+    clip_method : {"threshold", "prctile"} , default threshold
+        Method used for clipping sources. If "threshold", a fixed value is used.
+        If "prctile" values are cliped at the specified percentile (in percent) 
+        given the distribution of the predcted source. 
 
-        clip_value : float , default 20
-            Value at which the predicted sources are cliped or the percentile at which 
-            the predicted source is clipped.           
+    clip_value : float , default 20
+        Value at which the predicted sources are cliped or the percentile at which 
+        the predicted source is clipped.           
 
-        refinement_loop : bool , default True
-            If True, the unmixing weights w are updated through self-supervised 
-            learning. The updated unmixing weights are the mean of the 
-            whitened signal at the detected spikes.
+    refinement_loop : bool , default True
+        If True, the unmixing weights ``w`` are updated through self-supervised 
+        learning. The updated unmixing weights are the mean of the 
+        whitened signal at the detected spikes.
 
-        refinement_loss : {"cov_isi", "sil"}, default "cov_isi"
-            Metric used as optimization loss in the refinement loop. Can be either
-            minimizing the coefficient of variation (Cov) of the interspike 
-            interalls ("cov_isi") or maximizing the silhouette score ("sil"). 
+    refinement_loss : {"cov_isi", "sil"}, default "cov_isi"
+        Metric used as optimization loss in the refinement loop. Can be either
+        minimizing the coefficient of variation (CoV) of the interspike 
+        interalls ("cov_isi") or maximizing the silhouette score ("sil"). 
 
-        refinement_max_iter : int , default 100
-            Maximum number of iterations of the refinement loop
+    refinement_max_iter : int , default 100
+        Maximum number of iterations of the refinement loop
 
-        refinement_min_spikes : int , default 10
-            Only enter the refinement loop if the number of detected spikes is 
-            above the given threshold.        
+    refinement_min_spikes : int , default 10
+        Only enter the refinement loop if the number of detected spikes is 
+        above the given threshold.        
 
-        peel_off : bool , default True
-            If True, the contribution of identified sources is subtraced 
-            from the whitened signal. 
+    peel_off : bool , default True
+        If True, the contribution of identified sources is subtraced 
+        from the whitened signal. 
 
-        peel_off_window : float , default 0.025
-            Duration of the window used to peel off contributions from 
-            detected sources (in seconds).    
+    peel_off_window : float , default 0.025
+        Duration of the window used to peel off contributions from 
+        detected sources (in seconds).    
 
-        peel_of_sil_th : float , default 0.9
-            Only apply peel off if the source score is above the given
-            threshold value
+    peel_of_sil_th : float , default 0.9
+        Only apply peel off if the source score is above the given
+        threshold value
 
-        peel_of_cov_th : float , default 0.35
-            Only apply peel off if the source score is below the given
-            threshold value 
+    peel_of_cov_th : float , default 0.35
+        Only apply peel off if the source score is below the given
+        threshold value 
 
-        verbose : bool , default True
-            Verbose mode
+    verbose : bool , default True
+        Verbose mode
 
     Attributes
     ----------
 
-        unmixing_weights_ : np.ndarray (n_features, n_components)
-            The learned unmixing weights
+    unmixing_weights_ : np.ndarray 
+        The learned unmixing weights with shape ``(n_features, n_components)``
 
-        whiten_ : np.ndarray (n_features, n_features)
-            Whitening matrix   
+    whiten_ : np.ndarray (n_features, n_features)
+        Whitening matrix   
 
-        unwhiten_ : np.ndarray (n_features, n_features)
-            Inverse of the whitening matrix    
+    unwhiten_ : np.ndarray (n_features, n_features)
+        Inverse of the whitening matrix    
 
-        n_fixed_point_iter_ : np.ndarray of int
-            Number of iterations in the fixed point algorithm  
+    n_fixed_point_iter_ : np.ndarray of int
+        Number of iterations in the fixed point algorithm  
 
-        fixed_point_deltas_ : np.ndarray
-            Cosine distance between two fixed point updates
+    fixed_point_deltas_ : np.ndarray
+        Cosine distance between two fixed point updates
 
-        n_refinement_iter_ : np.ndarray of int
-            Number of iterations in the fixed point algorithm  
+    n_refinement_iter_ : np.ndarray of int
+        Number of iterations in the fixed point algorithm  
 
-        refinement_scores_ : np.ndarray
-            Score at each refinement iteration
+    refinement_scores_ : np.ndarray
+        Score at each refinement iteration
 
-        peel_off_ : np.ndarray of bool
-            Whether a source was peeled off or not
+    peel_off_ : np.ndarray of bool
+        Whether a source was peeled off or not
 
     References
     ----------
-    .. [1] Negro et et al., "Multi-channel intramuscular and surface
+    .. [1]  Hyvärinen and Oja, "Independent component analysis: algorithms 
+            and applications", Neural networks, 2000
+
+    .. [2] Negro et et al., "Multi-channel intramuscular and surface
            EMG decomposition by convolutive blind source separation",
            Journal of Neural Engineering, 2016 
-    .. [2] Mamidanna et et al., "MUniverse: A Simulation and Benchmarking 
+
+    .. [3] Mamidanna et et al., "MUniverse: A Simulation and Benchmarking 
            Suite for Motor Unit Decomposition", The Thirty-ninth Annual 
            Conference on Neural Information Processing Systems 
            Datasets and Benchmarks Track, 2025                    
 
 
-    Example
-    -------
+    Examples
+    --------
 
     Init FastIcaCBSS class using the default parameters and run decomposition.
     >>> model = FastIcaCBSS() 
@@ -499,24 +506,24 @@ class FastIcaCBSS(_BaseCBSS):
         """
         Run CBSS decomposition
 
-        Args
-        ----
-            sig : np.ndarray 
-                Input (EMG) signal (n_channels x n_samples)
+        Parameters
+        ----------
+        sig : np.ndarray 
+            Input (EMG) signal (n_channels x n_samples)
 
-            fsamp : float 
-                Sampling frequency in Hz
+        fsamp : float 
+            Sampling frequency in Hz
 
         Returns
         -------
-            spikes : dict 
-                Sample indices of motor neuron discharges
+        spikes : dict 
+            Sample indices of motor neuron discharges
 
-            sources : np.ndarray 
-                Estimated sources / ica components (n_components x n_samples)
-            
-            scores : dict
-                Dictonary of source quality scores ("sil" and "cov_isi")
+        sources : np.ndarray 
+            Estimated sources / ica components of shape ``(n_components, n_samples)``
+        
+        scores : dict
+            Dictonary of source quality scores ("sil" and "cov_isi")
 
         """
 
@@ -612,12 +619,27 @@ class FastIcaCBSS(_BaseCBSS):
                 and scores["sil"][i] > self.peel_off_sil_th 
                 and scores["cov_isi"][i] < self.peel_off_cov_th
                 ):
-                white_sig, _, _ = peel_off(
-                    white_sig, spikes[i], win=self.peel_off_window, fsamp=fsamp
-                )
+
+                if False:
+                    white_sig, _, _ = peel_off(
+                        white_sig, spikes[i], win=self.peel_off_window, fsamp=fsamp
+                    )
+                else:
+                    ext_sig, _, _ = peel_off(
+                        ext_sig, spikes[i], win=self.peel_off_window, fsamp=fsamp
+                    )
+                    # C_new = ext_sig @ ext_sig.T / (ext_sig.shape[1] - 1)
+                    # for _ in range(3):
+                    #     self.whiten_ = 0.5 * self.whiten_ @ (
+                    #         3*np.eye(C_new.shape[0]) - C_new @ self.whiten_ @ self.whiten_
+                    #     )
+                    # white_sig = self.whiten_ @ ext_sig    
+                    white_sig = self._whitening(ext_sig)
+
                 self.peel_off_[i] = True
                 if self.verbose:
                     print('  - Peel off: True')
+     
             else:
                 if self.verbose:
                     print('  - Peel off: False')
@@ -636,19 +658,19 @@ class FastIcaCBSS(_BaseCBSS):
             G(x) = sign(x) * abs(x)^a .
         For a = 3 this is equvivalent to maximizing skewness.
 
-        Args
-        ----
-            w : np.ndarray
-                Initial unmixing weight vector (n_channels,)
-            X : np.ndarray 
-                Whitened signal (n_channels x n_samples)
-            i : int
-                The current iteration     
+        Parameters
+        ----------
+        w : np.ndarray
+            Initial unmixing weight vector (n_channels,)
+        X : np.ndarray 
+            Whitened signal (n_channels x n_samples)
+        i : int
+            The current iteration     
 
         Returns
         -------
-            w : np.ndarray 
-                Optimized unmixing weight vector
+        w : np.ndarray 
+            Optimized unmixing weight vector
         """
 
         if self.ica_orthogonalization == "projection_deflation":
@@ -711,21 +733,21 @@ class FastIcaCBSS(_BaseCBSS):
         spike times as long as the coefficient of variance of the interspike
         intervall decreases.
 
-        Args
-        ----
-            w : np.ndarray 
-                Initial unmixing weight vector
-            X : np.ndarray 
-                Whitened signal matrix (n_channels x n_samples)
-            scores_i : dict 
-                Dictonary of quality scores at iteration i {"name": value}
-            fsamp : float 
-                Sampling rate in Hz
+        Parameters
+        ----------
+        w : np.ndarray 
+            Initial unmixing weight vector
+        X : np.ndarray 
+            Whitened signal matrix (n_channels x n_samples)
+        scores_i : dict 
+            Dictonary of quality scores at iteration i {"name": value}
+        fsamp : float 
+            Sampling rate in Hz
 
         Returns
         -------
-            w : np.ndarray 
-                Optimized weight vector
+        w : np.ndarray 
+            Optimized weight vector
 
         """
 
