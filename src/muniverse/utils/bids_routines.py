@@ -29,18 +29,18 @@ class _BaseBIDS:
         """
         Function to update metadata files.
 
-        Args
-        ----
-            field_name : str 
-                name of the attribute/metadata field to be update
+        Parameters
+        ----------
+        field_name : str 
+            name of the attribute/metadata field to be update
 
-            source : dict, DataFrame, or str 
-                Metadata (dict or str) or path to file (str) that should be used 
-                to update the metadata field
-     
-            overwrite : bool , default False 
-                If True, the attribute is overwritten by the given input.
-                Otherwise, the new input and aby existing content are merged. 
+        source : dict, DataFrame, or str 
+            Metadata (dict or str) or path to file (str) that should be used 
+            to update the metadata field
+
+        overwrite : bool , default False 
+            If True, the attribute is overwritten by the given input.
+            Otherwise, the new input and aby existing content are merged. 
         """
 
         current = getattr(self, field_name, None)
@@ -124,30 +124,30 @@ class BIDSDataset(_BaseBIDS):
     Class to handle dataset level data and metadata
     of a BIDS dataset
 
-    Attributes
+    Parameters
     ----------
 
-        root : str
-            The root folder of a BIDS dataset
+    root : str
+        The root folder of a BIDS dataset
 
-        datasetname : str
-            The name of a BIDS dataset
+    datasetname : str
+        The name of a BIDS dataset
 
-        readme : str
-            The README file of a BIDS dataset stored as a string    
+    readme : str
+        The README file of a BIDS dataset stored as a string    
 
-        dataset_sidecar : dict
-            Dictonary capturing the content of a *_dataset.json file  
+    dataset_sidecar : dict
+        Dictonary capturing the content of a *_dataset.json file  
 
-        subjects_data : pd.DataFrame
-            Table with subject information and pre-defined columns 
-            "participant_id", "age", "sex", "handedness", "weight" and "height"
+    subjects_data : pd.DataFrame
+        Table with subject information and pre-defined columns 
+        "participant_id", "age", "sex", "handedness", "weight" and "height"
 
-        subjects_sidecar : dict 
-            Dictonary capturing the content of a *_subjects.json file 
+    subjects_sidecar : dict 
+        Dictonary capturing the content of a *_subjects.json file 
 
-        BIDSIGNORE : list of str , default []
-            List of ignored files    
+    BIDSIGNORE : list of str , default []
+        List of ignored files    
 
     Links
     -----
@@ -191,13 +191,13 @@ class BIDSDataset(_BaseBIDS):
 
     def write(self, overwrite=False):
         """
-        Save dataset in BIDS format
+        Save the dataset-level data and metadata of your BIDS dataset
 
-        Args
-        ----
+        Parameters
+        ----------
 
-            overwrite : bool , default False
-                Whether to overwrite already existing files or not 
+        overwrite : bool , default False
+            Whether to overwrite already existing files or not 
 
         """
 
@@ -239,7 +239,7 @@ class BIDSDataset(_BaseBIDS):
 
     def read(self):
         """
-        Read data from BIDS dataset
+        Read the dataset-level data and metadata of your BIDS dataset
 
         """
 
@@ -271,18 +271,18 @@ class BIDSDataset(_BaseBIDS):
         """
         Function to update dataset-level metadata files.
 
-        Args
-        ----
-            field_name : str 
-                name of the attribute/metadata field to be update
+        Parameters
+        ----------
+        field_name : str 
+            name of the attribute/metadata field to be update
 
-            source : dict, DataFrame, or str 
-                Metadata (dict or str) or path to file (str) that should be used 
-                to update the metadata field
-     
-            overwrite : bool , default False 
-                If True, the attribute is overwritten by the given input.
-                Otherwise, the new input and aby existing content are merged. 
+        source : dict, DataFrame, or str 
+            Metadata (dict or str) or path to file (str) that should be used 
+            to update the metadata field
+    
+        overwrite : bool , default False 
+            If True, the attribute is overwritten by the given input.
+            Otherwise, the new input and aby existing content are merged. 
         """
 
         valid_fields = ["dataset_sidecar", "subjects_data", "subjects_sidecar"]
@@ -303,20 +303,20 @@ class BIDSDataset(_BaseBIDS):
         """
         Summarize all files with a given extension that are part of a BIDS folder
 
-        Args
-        ----
+        Parameters
+        ----------
 
-            suffix : str 
-                File type to be listed (e.g., "emg")
+        suffix : str 
+            File type to be listed (e.g., "emg")
 
-            extension : str 
-                File extension to be filtered (e.g. 'edf' for all *.edf files)
+        extension : str 
+            File extension to be filtered (e.g. 'edf' for all *.edf files)
 
         Returns
         -------
 
-            df : pd.DataFrame 
-                Table with all files in the given folder
+        df : pd.DataFrame 
+            Table with all files in the given folder
         """
 
         root = Path(self.root)
@@ -403,33 +403,33 @@ class BIDSDataset(_BaseBIDS):
         """
         API to run the BIDS validator
 
-        Args
-        ----
-            ignored_codes : list of str , default []
-                List of ignored error codes
+        Parameters
+        ----------
+        ignored_codes : list of str , default []
+            List of ignored error codes
 
-            ignored_fields : list of str , default [] 
-                List of ignored metadata fields
+        ignored_fields : list of str , default [] 
+            List of ignored metadata fields
 
-            ignored_files : list of str , default []
-                List of ignored files
+        ignored_files : list of str , default []
+            List of ignored files
 
-            print_errors : bool , default True
-                If True print all errors
+        print_errors : bool , default True
+            If True print all errors
 
-            print_warnings : bool , default True 
-                If True print all warnings
+        print_warnings : bool , default True 
+            If True print all warnings
 
         Returns
         -------
-            err : list of dict 
-                List of all errors
+        err : list of dict 
+            List of all errors
 
-            war : list of dict 
-                List of all warnings
+        war : list of dict 
+            List of all warnings
 
-            valid : bool 
-                Returns True if there are no errors
+        valid : bool 
+            Returns True if there are no errors
         
         """
 
@@ -450,79 +450,79 @@ class EMGBIDSRecording(_BaseBIDS):
     """
     Class for handling data and metadata files from EMG-BIDS dataset.
 
-    Attributes
+    Parameters
     ----------
 
-        root : str
-            The root folder of a BIDS dataset
+    root : str
+        The root folder of a BIDS dataset
 
-        datasetname : str
-            The name of a BIDS dataset
+    datasetname : str
+        The name of a BIDS dataset
 
-        datapath : str
-            Folder where the recording file is/will be stored
+    datapath : str
+        Folder where the recording file is/will be stored
 
-        subject_label : str , default "01"
-            Label of the subject the recording belongs to
+    subject_label : str , default "01"
+        Label of the subject the recording belongs to
 
-        session_label : str or None , default None
-            Label of the session the recording belongs to   
+    session_label : str or None , default None
+        Label of the session the recording belongs to   
 
-        task_label : str , default "taskName"
-            Label of the task perfomed in this recording 
+    task_label : str , default "taskName"
+        Label of the task perfomed in this recording 
 
-        acq_label : str or None , default None
-            Label distnguish multiple aquisition modes 
+    acq_label : str or None , default None
+        Label distnguish multiple aquisition modes 
 
-        run_label : str or None , default "01"
-            Label to distnguish multiple repetitions of the same task  
+    run_label : str or None , default "01"
+        Label to distnguish multiple repetitions of the same task  
 
-        recording_label : str or None , default None 
-            Label to distnguish data files from different aquisition systems     
+    recording_label : str or None , default None 
+        Label to distnguish data files from different aquisition systems     
 
-        datatype : str , default "emg"
-            Type of data (for now always EMG) 
+    datatype : str , default "emg"
+        Type of data (for now always EMG) 
 
-        data : np.ndarray
-            Data matrx (n_channels, n_samples)  
+    data : np.ndarray
+        Data matrx (n_channels, n_samples)  
 
-        fsamp : float
-            Sampling rate in Hz        
+    fsamp : float
+        Sampling rate in Hz        
 
-        fileformat : {"edf", "bdf"} , default "edf"
-            File format used to store the data matrix 
+    fileformat : {"edf", "bdf"} , default "edf"
+        File format used to store the data matrix 
 
-        emg_sidecar : dict
-            Dictonary corresponding to the "_emg.json" file    
+    emg_sidecar : dict
+        Dictonary corresponding to the "_emg.json" file    
 
-        channels : pd.DataFrame
-            Table with channel-specific metadata
+    channels : pd.DataFrame
+        Table with channel-specific metadata
 
-        channels_sidecar : dict
-            Dictonary corresponding to the "_channels.json" file        
+    channels_sidecar : dict
+        Dictonary corresponding to the "_channels.json" file        
 
-        electrodes : pd.DataFrame
-            Table with electrode-specific metadata   
+    electrodes : pd.DataFrame
+        Table with electrode-specific metadata   
 
-        electrodes_sidecar : dict
-            Dictonary corresponding to the "_electrodes.json" file   
+    electrodes_sidecar : dict
+        Dictonary corresponding to the "_electrodes.json" file   
 
-        coord_sidecar : dict of dict
-            Dictonary of dictonaries, whereby each key corresponds 
-            to one coordinate system  
+    coord_sidecar : dict of dict
+        Dictonary of dictonaries, whereby each key corresponds 
+        to one coordinate system  
 
-        events : pd.DataFrame
-            Table of events describing the experiment. Must contain
-            the columns "onset" and "duration"
+    events : pd.DataFrame
+        Table of events describing the experiment. Must contain
+        the columns "onset" and "duration"
 
-        events_sidecar : dict     
-            Dictonary corresponding to the "_events.json" file      
+    events_sidecar : dict     
+        Dictonary corresponding to the "_events.json" file      
 
-        inherited_metadata : dict    
-            Dictonary of inherited metadata files
+    inherited_metadata : dict    
+        Dictonary of inherited metadata files
 
-        inherited_levels : dict    
-            Dictonary with the levels of the inherited metadata files          
+    inherited_levels : dict    
+        Dictonary with the levels of the inherited metadata files          
 
     Links
     -----
@@ -654,8 +654,8 @@ class EMGBIDSRecording(_BaseBIDS):
         """
         Set which metadata files should be inherited at session level.
 
-        Args
-        ----
+        Parameters
+        ----------
         metadata_files : list of str
             List of metadata file names to inherit. Must be from _INHERITABLE_FILES.
             Example: ['electrodes', 'coordsystem']
@@ -806,12 +806,12 @@ class EMGBIDSRecording(_BaseBIDS):
 
     def write(self, overwrite=False):
         """
-        Save dataset in BIDS format
+        Save the the data and metadata of an EMG-BIDS recording
 
-        Args
-        ----
-            overwrite : bool , default False
-                Whether to overwrite already existing files or not 
+        Parameters
+        ----------
+        overwrite : bool , default False
+            Whether to overwrite already existing files or not 
 
         """
 
@@ -968,18 +968,18 @@ class EMGBIDSRecording(_BaseBIDS):
         """
         Function to update EMG recording-level metadata files.
 
-        Args
+        Parameters
         ----
-            field_name : str 
-                name of the attribute/metadata field to be update
+        field_name : str 
+            name of the attribute/metadata field to be update
 
-            source : dict, DataFrame, or str 
-                Metadata (dict or str) or path to file (str) that should be used 
-                to update the metadata field
-     
-            overwrite : bool , default False 
-                If True, the attribute is overwritten by the given input.
-                Otherwise, the new input and the existing content are merged. 
+        source : dict, DataFrame, or str 
+            Metadata (dict or str) or path to file (str) that should be used 
+            to update the metadata field
+
+        overwrite : bool , default False 
+            If True, the attribute is overwritten by the given input.
+            Otherwise, the new input and the existing content are merged. 
         """
 
         if field_name == "coord_sidecar":
@@ -1041,16 +1041,17 @@ class EMGBIDSRecording(_BaseBIDS):
         """
         Add raw data and convert it into edf format
 
-        Args
+        Parameters
         ----
-            field_name : str 
-                Name of the field to be updated
 
-            mydata : np.ndarry 
-                Data matrix (n_channels, n_samples)
+        field_name : str 
+            Name of the field to be updated
 
-            fsamp  : float 
-                Sampling frequency in Hz
+        mydata : np.ndarry 
+            Data matrix (n_channels, n_samples)
+
+        fsamp  : float 
+            Sampling frequency in Hz
 
         """
 
@@ -1075,13 +1076,13 @@ class EMGBIDSRecording(_BaseBIDS):
         """
         Read data from a table of recording files
 
-        Args
+        Parameters
         ----
-            df : pd.DataFrame
-                Table recordings belonging to a BIDS dataset
+        df : pd.DataFrame
+            Table of recordings belonging to a BIDS dataset
 
-            idx : int
-                Row index of the recording to be imported    
+        idx : int
+            Row index of the recording to be imported    
         
         """
         self.subject_label = df.loc[idx, "sub"]
@@ -1104,14 +1105,14 @@ class EMGBIDSRecording(_BaseBIDS):
         """
         Add a new coordinate system 
 
-        Args
+        Parameters
         ----
 
-            name : str
-                Unqiue name of the coordinate System
+        name : str
+            Unqiue name of the coordinate System
 
-            metadata : dict
-                Dictonary of coordinate system metadata    
+        metadata : dict
+            Dictonary of coordinate system metadata    
         
         """
 
@@ -1253,72 +1254,72 @@ class BIDSDecompositionDerivative(_BaseBIDS):
     Note that while the implementation follows BIDS-derivative rules
     the obtained outputs do not represent a standardized format.
 
-    Attributes
+    Parameters
     ----------
 
-        root : str
-            The root folder of the BIDS derivative dataset
-   
-        datasetname : str
-            The name of the BIDS derivative dataset 
+    root : str
+        The root folder of the BIDS derivative dataset
 
-        datapath : str
-            Folder where the derivative files are/will be stored    
+    datasetname : str
+        The name of the BIDS derivative dataset 
 
-        fileformat : {"edf", "bdf"} , default "edf"
-            File format used to store a data matrix       
+    datapath : str
+        Folder where the derivative files are/will be stored    
 
-        subject_label : str , default "01"
-            Label of the subject the recording belongs to
+    fileformat : {"edf", "bdf"} , default "edf"
+        File format used to store a data matrix       
 
-        session_label : str or None , default None
-            Label of the session the recording belongs to   
+    subject_label : str , default "01"
+        Label of the subject the recording belongs to
 
-        task_label : str , default "taskName"
-            Label of the task perfomed in this recording 
+    session_label : str or None , default None
+        Label of the session the recording belongs to   
 
-        acq_label : str or None , default None
-            Label distnguish multiple aquisition modes 
+    task_label : str , default "taskName"
+        Label of the task perfomed in this recording 
 
-        run_label : str or None , default "01"
-            Label to distnguish multiple repetitions of the same task  
+    acq_label : str or None , default None
+        Label distnguish multiple aquisition modes 
 
-        recording_label : str or None , default None 
-            Label to distnguish data files from different aquisition systems    
+    run_label : str or None , default "01"
+        Label to distnguish multiple repetitions of the same task  
 
-        desc_label : str
-            Label to distnguish processed files from the raw data     
+    recording_label : str or None , default None 
+        Label to distnguish data files from different aquisition systems    
 
-        datatype : str , default "emg"
-            Type of data the derivatibe was derived from (for now always EMG) 
+    desc_label : str
+        Label to distnguish processed files from the raw data     
 
-        fsamp : float
-            Sampling rate in Hz    
+    datatype : str , default "emg"
+        Type of data the derivatibe was derived from (for now always EMG) 
 
-        source : np.ndarray
-            Data matrix of the predicted sources (n_sources, n_samples)
+    fsamp : float
+        Sampling rate in Hz    
 
-        source_sidecar : dict     
-            Dictonary corresponding to the "_source.json" file             
- 
-        events : pd.DataFrame
-            Table of motor unit spikes. Must contain
-            the columns "onset" and "duration"
+    source : np.ndarray
+        Data matrix of the predicted sources (n_sources, n_samples)
 
-        events_sidecar : dict     
-            Dictonary corresponding to the "_events.json" file         
+    source_sidecar : dict     
+        Dictonary corresponding to the "_source.json" file             
 
-        log : dict
-            Dictonary of proecessing metadata
+    events : pd.DataFrame
+        Table of motor unit spikes. Must contain
+        the columns "onset" and "duration"
 
-        code : str
-            Path to the script/code generated this derivative        
+    events_sidecar : dict     
+        Dictonary corresponding to the "_events.json" file         
 
-        inherited_metadata : dict    
-            Dictonary of inherited metadata files
+    log : dict
+        Dictonary of proecessing metadata
 
-        inherited_levels : dict    
-            Dictonary with the levels of the inherited metadata files
+    code : str
+        Path to the script/code generated this derivative        
+
+    inherited_metadata : dict    
+        Dictonary of inherited metadata files
+
+    inherited_levels : dict    
+        Dictonary with the levels of the inherited metadata files
     
     """
 
@@ -1476,10 +1477,10 @@ class BIDSDecompositionDerivative(_BaseBIDS):
         """
         Save dataset in BIDS format
 
-        Args
-        ----
-            overwrite : bool , default False
-                Whether to overwrite already existing files or not 
+        Parameters
+        ----------
+        overwrite : bool , default False
+            Whether to overwrite already existing files or not 
 
         """
         # Generate an empty set of folders for your BIDS dataset
@@ -1566,13 +1567,13 @@ class BIDSDecompositionDerivative(_BaseBIDS):
         """
         Convert a dictionary of spike times to long-format TSV-style DataFrame.
 
-        Args
+        Parameters
         ----
-            spikes : dict or DataFrame 
-                Dictonary or Table with motor unit spikes
+        spikes : dict or DataFrame 
+            Dictonary or Table with motor unit spikes
 
-            fsamp : float
-                Sampling frequency in Hz
+        fsamp : float
+            Sampling frequency in Hz
 
         """
 
@@ -1687,37 +1688,42 @@ def run_bids_validator(
     """
     API to the official BIDS validator.
 
-    Args
+    Parameters
     ----
 
-        path : str 
-            Absolute or relative path to your BIDS dataset
+    path : str 
+        Absolute or relative path to your BIDS dataset
 
-        ignored_codes : list of str 
-            Ignored error codes (e.g. ["SIDECAR_KEY_RECOMMENDED"])
+    ignored_codes : list of str 
+        Ignored error codes (e.g. ["SIDECAR_KEY_RECOMMENDED"])
 
-        ignored_fileds : list of str 
-            Errors corresponding to that field are ignored (e.g. ["DeviceSerialNumber"])
+    ignored_fileds : list of str 
+        Errors corresponding to that field are ignored (e.g. ["DeviceSerialNumber"])
 
-        ignored_files : list of str 
-            Ignored errors in these files (e.g. ["/dataset_description.json"])
+    ignored_files : list of str 
+        Ignored errors in these files (e.g. ["/dataset_description.json"])
 
-        print_errors : bool 
-            Descides if errors should be printed 
+    print_errors : bool 
+        Descides if errors should be printed 
 
-        print_warnings : bool
-            Descides if warnings should be printed 
+    print_warnings : bool
+        Descides if warnings should be printed 
 
     Returns
     -------
-        errors : list 
-            List of detected errors
-        
-        warnings : list 
-            List of detected warnings  
+    errors : list 
+        List of detected errors
+    
+    warnings : list 
+        List of detected warnings  
 
-        valid : bool 
-            Returns True if there were no errors deteced  
+    valid : bool 
+        Returns True if there were no errors deteced 
+
+    Links
+    -----
+
+    - https://bids-validator.readthedocs.io/en/latest/index.html     
     
     """
 

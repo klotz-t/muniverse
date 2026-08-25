@@ -427,35 +427,36 @@ def decompose_cbss(
     API to run a CBSS decomposition pipeline with optional
     pre and post processing steps.
 
-    Args
+    Parameters
     ----
-        data : np.ndarray 
-            EMG data (n_channels, n_samples)
+    data : np.ndarray 
+        EMG data (n_channels, n_samples)
 
-        fsamp : float
-            Sampling rate in Hz     
+    fsamp : float
+        Sampling rate in Hz     
 
-        algorithm_config : dict (Optional) 
-            Dictonary with the pipeline configuration
+    algorithm_config : dict (Optional) 
+        Dictonary with the pipeline configuration
 
-        meta: dict (Optional)
-            Optional dictionary containing input data metadata for logging
+    meta: dict (Optional)
+        Optional dictionary containing input data metadata for logging
 
     Returns
     -------
-        results : dict
-            Dictonary containing
-                - data (np.ndarray): Pre-processed data
-                - spikes (pd.DataFrame): Table of motor unit spikes
-                - sources (np.ndarray): Predicted sources
-                - scores (dict): Source quality metrics
-                - pre_process_metadata (dict): Metadata correspoding to
-                pre processing steps (Optional)
-                - post_process_metadata (dict): Metadata correspoding to
-                post processing steps (Optional)
+    results : dict
+        Dictonary containing::
+        
+            - data (np.ndarray): Pre-processed data
+            - spikes (pd.DataFrame): Table of motor unit spikes
+            - sources (np.ndarray): Predicted sources
+            - scores (dict): Source quality metrics
+            - pre_process_metadata (dict): Metadata correspoding to
+            pre processing steps (Optional)
+            - post_process_metadata (dict): Metadata correspoding to
+            post processing steps (Optional)
 
-        log_data : dict
-            Dictonary of processing metadata        
+    log_data : dict
+        Dictonary of processing metadata        
 
 
     """

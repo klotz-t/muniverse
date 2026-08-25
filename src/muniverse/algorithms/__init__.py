@@ -18,8 +18,11 @@ def init():
     This includes verifying container engines and pulling container images if needed.
     If both Docker and Singularity are available, Singularity will be used by default.
 
-    Returns:
-        str: The selected container engine ("docker" or "singularity")
+    Returns
+    -------
+    engine : str 
+        The selected container engine ("docker" or "singularity")
+        
     """
     # Check availability of both engines
     docker_available = verify_container_engine("docker")
@@ -52,47 +55,52 @@ def decompose_recording(
     container: Optional[str] = None,
 ) -> Tuple[Dict, Dict]:
     """
-    API to decompose EMG recordings using the specified method.
+    Highlevel API to decompose an EMG recording using the specified method.
 
-    Args
-    ----
-        data : {str, np.ndarray} 
-            Either a path to input data file (.npy or .edf) or a numpy array 
-            of EMG data (n_channels, n_samples)
+    Parameters
+    ----------
+    data : {str, np.ndarray} 
+        Either a path to input data file (``.npy`` or ``.edf``) 
+        or a numpy array with shape ``(n_channels, n_samples)``
 
-        fsamp : float
-            Sampling rate in Hz    
+    fsamp : float
+        Sampling rate in Hz    
 
-        method: {"scd", "cbss", "ae"} , default "cbss"
-            Decomposition method to use. Use "scd" for SwarmContrastiveDecomposition,
-            "cbss" for FastIcaCBSS, or "ae" for AEDecoder.
+    method: {"scd", "cbss", "ae"} , default "cbss"
+        Decomposition method to use. Use "scd" for SwarmContrastiveDecomposition,
+        "cbss" for FastIcaCBSS, or "ae" for AEDecoder.
 
-        algorithm_config : dict 
-            Dictionary containing the algorithm configuration. If None, the default 
-            configs will be used
+    algorithm_config : dict 
+        Dictionary containing the algorithm configuration. If None, the default 
+        configs will be used
 
-        engine : {"docker", "singularity", "local"}, default "local"
-            Container engine to use. If "local", no container is used and code is 
-            evaluated locally (only required for SCD method).
+    engine : {"docker", "singularity", "local"}, default "local"
+        Engine used to run the algorith,. If "local", no container is used and code is 
+        evaluated locally (only required if the selected ``method``is ``"scd"``)
 
-        container : str 
-            Path to container image (only required for SCD method).
+    container : str 
+        Path to container image (only required if the selected ``method``is ``"scd"``)
 
     Returns
     -------
-        results : dict
-            Dictonary containing
-                - data (np.ndarray): Pre-processed data
-                - spikes (pd.DataFrame): Table of motor unit spikes
-                - sources (np.ndarray): Predicted sources
-                - scores (dict): Source quality metrics
-                - pre_process_metadata (dict): Metadata correspoding to
-                pre processing steps (Optional)
-                - post_process_metadata (dict): Metadata correspoding to
-                post processing steps (Optional)
+    results : dict
+        Dictonary containing
 
-        log_data : dict
-            Dictonary of processing metadata 
+            data : np.ndarray
+                Pre-processed data with shape (n_channels, n_samples)
+            spikes : pd.DataFrame
+                Table of motor unit spikes
+            sources : np.ndarray 
+                Predicted sources with shape (n_sources, n_samples)
+            scores : dict 
+                Dictonary of source quality metrics
+            pre_process_metadata : dict
+                 Metadata correspoding to pre processing steps (Optional)
+            post_process_metadata : dict 
+                Metadata correspoding to post processing steps (Optional)
+
+    log_data : dict
+        Dictonary of processing metadata 
         
     Note
     ----

@@ -24,6 +24,26 @@ class PreProcessEMG:
         List of preprocessing steps. Each step is a dictionary describing
         the processing operation.
 
+    Examples
+    --------
+    Pre process HD-EMG data using a bandpass and a notch filter.
+    >>> model = pre_processing(steps = [
+    ...     {
+    ...         "step": "bandpass",
+    ...         "high_pass": 20,
+    ...         "low_pass": 500,
+    ...         "method": "butter",
+    ...         "order": 2
+    ...     },
+    ...     {
+    ...         "step": "notch",
+    ...         "freqs": [50, 100, 150],
+    ...         "method": "butter",
+    ...         "order": 2
+    ...     },
+    ... ])
+    >>> preprocessed_data, metadata = model.pre_process(data=emg_data, fsamp=2048)     
+
     Processing Steps
     ----------------    
     **Bandpass filter**: Bandpass filter time series data using a digital
@@ -59,11 +79,11 @@ class PreProcessEMG:
             "step": "lowpass",
             "low_pass": float,
             "method": "butter" | "firwin2",
-            "order": int, # required if method == "butter"
-            "numtabs": int, # required if method == "firwin2"
+            "order": int, # required if the selected method is ``butter``
+            "numtabs": int, # required if the selected method is ``firwin2``
         }
 
-    **Notch filter**:: Apply a digital notch (stop band) filter using either a
+    **Notch filter**: Apply a digital notch (stop band) filter using either a
     infinite impulse response filter ("butter"), a finite impulse response 
     filter ("iirnotch") or performing filtering in the frequency domain 
     ("fft_nulling" and "fft_interpolation"). For "fft_nulling" the spectrum in
@@ -140,27 +160,7 @@ class PreProcessEMG:
             "step": "peel_off",
             "window_size": float, # Half-length of the peel off window in seconds
         }    
-
-    Examples:
-    ---------
-    Pre process HD-EMG data using a bandpass and a notch filter.
-    >>> model = pre_processing(steps = [
-    ...     {
-    ...         "step": "bandpass",
-    ...         "high_pass": 20,
-    ...         "low_pass": 500,
-    ...         "method": "butter",
-    ...         "order": 2
-    ...     },
-    ...     {
-    ...         "step": "notch",
-    ...         "freqs": [50, 100, 150],
-    ...         "method": "butter",
-    ...         "order": 2
-    ...     },
-    ... ])
-    >>> preprocessed_data, metadata = model.pre_process(data=emg_data, fsamp=2048)                     
-
+                    
     """
 
     def __init__(
@@ -273,7 +273,16 @@ class PreProcessEMG:
     _adapter = TypeAdapter(PreprocessStep)
 
     def add_step(self, step):
-        """ Add an additional post processing step"""
+        """ 
+        Add an additional post processing step
+        
+        Parameters
+        ----------
+        
+        step : dict
+            Dictonary with the parameters of the added processing step
+        
+        """
         
         self.steps.append(
             self._adapter.validate_python(step)
@@ -413,27 +422,27 @@ class PreProcessEMG:
         Pre process multi-channel time EMG data using the 
         specified list of steps.
 
-        Args
-        ----
-            data : np.ndarray (n_channels x n_samples)
-                Raw time series data 
-            fsamp : float 
-                Sampling rate in Hz
-            spikes : pd.DataFrame
-                Prior knowledge motor unit spike times    
+        Parameters
+        ----------
+        data : np.ndarray 
+            Raw time series data of shape ``(n_channels, n_samples)``
+        fsamp : float 
+            Sampling rate in Hz
+        spikes : pd.DataFrame
+            Prior knowledge motor unit spike times    
 
         Returns
         -------
-            data : np.ndarray (n_channels x n_samples)
-                Pre-prcessed time series data 
-            metadata : dict
-                Dictonary of process metadata 
-                - fsamp (float): Sampling rate in Hz
-                - ch_mask (np.ndarray): Boolean channel selection mask
-                - sample_mask (np.ndarray): Boolean sample selection mask
-                - ch_status (pd.DataFrame): Channel status 
-            steps : list
-                List of the applied processing steps       
+        data : np.ndarray (n_channels x n_samples)
+            Pre-prcessed time series data 
+        metadata : dict
+            Dictonary of process metadata 
+            - fsamp (float): Sampling rate in Hz
+            - ch_mask (np.ndarray): Boolean channel selection mask
+            - sample_mask (np.ndarray): Boolean sample selection mask
+            - ch_status (pd.DataFrame): Channel status 
+        steps : list
+            List of the applied processing steps       
         
         """
 

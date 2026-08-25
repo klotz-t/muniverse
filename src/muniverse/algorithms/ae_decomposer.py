@@ -139,91 +139,91 @@ class _EMGAutoencoder(nn.Module):
 
 class AEDecoder:
     """
-    Class implementing autoencoder-based EMG (unsupervised) decomposition 
+    Class implementing unsupervised, autoencoder-based EMG decomposition 
 
-    Properties
+    Parameters
     ----------
-        spike_detection_exp : float , default 2
-            Exponent of asymetric power law applied to the extracted sources
-            before spike detection
+    spike_detection_exp : float , default 2
+        Exponent of asymetric power law applied to the extracted sources
+        before spike detection
 
-        spike_detection_min_delay : float , default 0.01
-            Minimum distance between two detected spikes in seconds  
+    spike_detection_min_delay : float , default 0.01
+        Minimum distance between two detected spikes in seconds  
 
-        ext_fact : int, default 2
-            Number of delayed copies
+    ext_fact : int, default 2
+        Number of delayed copies
 
-        whitening_method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
-            Method used for whitening
+    whitening_method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
+        Method used for whitening
 
-        whitening_regularization : {"auto", float, None}, default "auto" 
-            Adds a small value to the eigenvalues for regularization. 
-            If "auto", the mean of the second half of the eigenvalues is used.
-            
-        whitening_backend : {"ed", "svd"}, default "ed" 
-            Method used to calculate eigenvalues and eigenvectors. Can be
-            either based on singular value decomposition ("svd") or an
-            eigendecomposition ("ed"). Only needed if method is "ZCA" or "PCA".
+    whitening_regularization : {"auto", float, None}, default "auto" 
+        Adds a small value to the eigenvalues for regularization. 
+        If "auto", the mean of the second half of the eigenvalues is used.
+        
+    whitening_backend : {"ed", "svd"}, default "ed" 
+        Method used to calculate eigenvalues and eigenvectors. Can be
+        either based on singular value decomposition ("svd") or an
+        eigendecomposition ("ed"). Only needed if method is "ZCA" or "PCA".
 
-        latent_dim : int or None , default None
-            Dimensionality of the latent sources. If None the number
-            of EMG channels is used
+    latent_dim : int or None , default None
+        Dimensionality of the latent sources. If None the number
+        of EMG channels is used
 
-        epochs : int , default 100
-            Number of epoches used to train the autoencoder model
+    epochs : int , default 100
+        Number of epoches used to train the autoencoder model
 
-        batch_size : int , default 5000         
-            Number of time samples used per mini-batch during the
-            training of the autoencoder model
+    batch_size : int , default 5000         
+        Number of time samples used per mini-batch during the
+        training of the autoencoder model
 
-        shuffle_windows : bool , default True
-            If "True", the minibacthes are randomly shuffeled 
-            during the training of the autoencoder model    
+    shuffle_windows : bool , default True
+        If "True", the minibacthes are randomly shuffeled 
+        during the training of the autoencoder model    
 
-        learning_rate : float , default 8e-3
-            Learning rate of the Adam optimizer used to train the autoencoder
+    learning_rate : float , default 8e-3
+        Learning rate of the Adam optimizer used to train the autoencoder
 
-        weight_decay : float, default 0.0
-            Weight decay of the Adam optimizer used to train the
-            autoencoder model    
+    weight_decay : float, default 0.0
+        Weight decay of the Adam optimizer used to train the
+        autoencoder model    
 
-        sparsity_p : float, default 0.9
-            Parameter controlling the degree of the sparsity penalty in
-            the cost function
-            
-        sparsity_q : float , default 1.8
-            Parameter to regularize the sparsity penalty in the cost function
+    sparsity_p : float, default 0.9
+        Parameter controlling the degree of the sparsity penalty in
+        the cost function
+        
+    sparsity_q : float , default 1.8
+        Parameter to regularize the sparsity penalty in the cost function
 
-        lambda_sparsity : float , default 1.0
-            Weight term for the sparsity penality in the cost function
+    lambda_sparsity : float , default 1.0
+        Weight term for the sparsity penality in the cost function
 
-        device : str or torch.device , default "cpu" 
-            Device on which torch tensors will be allocated
+    device : str or torch.device , default "cpu" 
+        Device on which torch tensors will be allocated
 
-        dtype : torch.dtype , default torch.float32 
-            Floating-point precision for torch tensors 
+    dtype : torch.dtype , default torch.float32 
+        Floating-point precision for torch tensors 
 
-        random_seed : int , default 1909
-            Seed of the random number generator.
+    random_seed : int , default 1909
+        Seed of the random number generator.
 
 
 
     Attributes
     ----------
-        autoencoder_ : nn.Module
-            The learned autoencoder model 
+    autoencoder_ : nn.Module
+        The learned autoencoder model 
 
-        whiten_ : np.ndarray
-            The whitening matrix
+    whiten_ : np.ndarray
+        The whitening matrix
 
-        unwhiten_ : np.ndarray
-            The unwhietning matrix  
+    unwhiten_ : np.ndarray
+        The unwhietning matrix  
 
-        unmixing_weights_ : np.ndarray (n_features, n_components)
-            The learned unmixing weights
+    unmixing_weights_ : np.ndarray (n_features, n_components)
+        The learned unmixing weights
 
-        epoch_loss_ : np.ndarray
-            Loss after each training iteration
+    epoch_loss_ : np.ndarray
+        Loss after each training iteration
           
 
     
@@ -233,6 +233,7 @@ class AEDecoder:
            signals recorded by thin-film electrode arrays implanted in muscles using 
            autoencoding with a physiologically derived optimisation criterion",
            Biomedical Signal Processing and Control, 2023
+
     .. [2] Mamidanna et et al., "MUniverse: A Simulation and Benchmarking 
            Suite for Motor Unit Decomposition", The Thirty-ninth Annual 
            Conference on Neural Information Processing Systems 
@@ -391,10 +392,10 @@ class AEDecoder:
         """
         Initalize the autoencoder model
 
-        Args
-        ----
-            n_features : int
-                Number features of the whitened data matrix
+        Parameters
+        ----------
+        n_features : int
+            Number features of the whitened data matrix
 
         """
 
@@ -416,10 +417,10 @@ class AEDecoder:
         """
         Train the Autoencoder model given training data Xw
 
-        Args
-        ----
-            Xw : torch.Tensor
-                Whitened data 
+        Parameters
+        ----------
+        Xw : torch.Tensor
+            Whitened data 
         
         
         """
@@ -537,12 +538,12 @@ class AEDecoder:
         """
         Fit the weights of the autoencoder given training data
 
-        Args
+        Parameters
         ----
-            sig : np.ndarray 
-                EMG data (n_channels, n_samples)
-            fsamp: float 
-                sampling frequency (Hz)
+        sig : np.ndarray 
+            EMG data (n_channels, n_samples)
+        fsamp: float 
+            sampling frequency (Hz)
 
 
         """
@@ -567,24 +568,24 @@ class AEDecoder:
             fsamp: float
     ):
         """
-        Args
-        ----
-            sig : np.ndarray 
-                EMG data (n_channels, n_samples)
+        Parameters
+        ----------
+        sig : np.ndarray 
+            EMG data (n_channels, n_samples)
 
-            fsamp: float 
-                sampling frequency (Hz)
+        fsamp: float 
+            sampling frequency (Hz)
 
         Returns
         -------
-            spikes : pd.DataFrame 
-                Spike table (columns: onset, duration, sample, unit_id, description)
+        spikes : pd.DataFrame 
+            Spike table (columns: onset, duration, sample, unit_id, description)
 
-            sources : np.ndarray 
-                Estimated latents / sources (n_components x n_samples)
+        sources : np.ndarray 
+            Estimated latents / sources with shape ``(n_components, n_samples)``
 
-            scores : dict of np.ndarray 
-                Source trustworthiness scores ("sil" and "cov_isi")
+        scores : dict of np.ndarray 
+            Source trustworthiness scores ("sil" and "cov_isi")
 
         """
         # Preprocess (extension + whitening) 
@@ -626,21 +627,21 @@ class AEDecoder:
         Predict motor unit spikes based on the trained autoencoder
         model given some data. 
 
-        Args
-        ----
-            sig : np.ndarray 
-                EMG data (n_channels, n_samples)
-            fsamp: float 
-                sampling frequency (Hz)
+        Parameters
+        ----------
+        sig : np.ndarray 
+            EMG data (n_channels, n_samples)
+        fsamp: float 
+            sampling frequency (Hz)
 
         Returns
         -------
-            spikes : pd.DataFrame 
-                Spike table (columns: onset, duration, sample, unit_id, description)
-            sources : np.ndarray 
-                Estimated latents / sources (n_components x n_samples)
-            scores : dict of np.ndarray 
-                Source trustworthiness scores ("sil" and "cov_isi")
+        spikes : pd.DataFrame 
+            Spike table (columns: onset, duration, sample, unit_id, description)
+        sources : np.ndarray 
+            Estimated latents / sources (n_components x n_samples)
+        scores : dict of np.ndarray 
+            Source trustworthiness scores ("sil" and "cov_isi")
 
         """
         # Preprocess (extension + whitening) 
@@ -693,16 +694,14 @@ class AEDecoder:
         Load a model including both parameters and learned 
         attributes for downstream usage
 
-        Args
-        ----
-            model : dict
-                Dictonary containing all parameters and learned 
-                attributes of the model 
+        Parameters
+        ----------
+        model : dict
+            Dictonary containing all parameters and learned 
+            attributes of the model 
 
-            device : str , default "cpu"
-                Device on which torch tensors will be allocated
-
-        
+        device : str , default "cpu"
+            Device on which torch tensors will be allocated        
         """
 
         if isinstance(device, str):
