@@ -52,16 +52,27 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+
+alg = [
+    "swarm-contrastive-decomposition",
+]
+
 dev = [
+    "jupyter",
+    "ipykernel",
+    "seaborn",
     "pytest",
     "pytest-cov",
     "black",
     "isort",
     "mypy",
-    "jupyter",
-    "ipykernel",
-    "seaborn",
-    "swarm-contrastive-decomposition",
+]
+
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material",
+    "mkdocstrings[python]",
+    "mkdocs-jupyter",
 ]
 
 [tool.setuptools]
