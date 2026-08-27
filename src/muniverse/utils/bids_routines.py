@@ -149,6 +149,50 @@ class BIDSDataset(_BaseBIDS):
     BIDSIGNORE : list of str , default []
         List of ignored files    
 
+    Examples
+    --------
+
+    Load the data and metadata of a BIDS dataset stored
+    on your computer
+
+    >>> from muniverse.utils.bids_routines import BIDSDataset
+    >>> bids_dataset = BIDSDataset(
+    ...     root="/this/is/the/path/to/some_bids_dataset/"
+    ... )
+    >>> bids_dataset.read()
+
+    Set up your own BIDS dataset and curate the dataset-level
+    data and metadata
+
+    >>> my_bids_dataset = BIDSDataset(
+    ...     datasetname="SimpleBIDSExample",
+    ...     path="./"
+    ... )
+    >>> dataset_sidecar = {
+    ...     "Name": "SimpleBIDSExample,
+    ...     "DatasetType": "raw",
+    ...     "License": "CC BY 4.0",
+    ...     "Authors": ["alice", "bob"]
+    ... }
+    >>> subjects = {
+    ...     "participant_id": ["sub-01", "sub-02"],
+    ...     "age": [42, 44] 
+    ... }
+    >>> my_bids_dataset.set_metadata(
+    ...     field_name="dataset_sidecar", source=dataset_sidecar
+    ... )
+    >>> my_bids_dataset.set_metadata(
+    ...     field_name="subjects_sidecar", source=subjects
+    ... )
+    >>> my_bids_dataset.readme = '''
+    ... # Header 1
+    ... Lorem ipsum dolor sit amet, ...
+    ... ## Header 2
+    ... Lorem ipsum dolor sit amet, ...
+    ... '''
+    >>> my_bids_dataset.set_default_participant_sidecar()
+    >>> my_bids_dataset.write()     
+
     Links
     -----
 
@@ -522,7 +566,58 @@ class EMGBIDSRecording(_BaseBIDS):
         Dictonary of inherited metadata files
 
     inherited_levels : dict    
-        Dictonary with the levels of the inherited metadata files          
+        Dictonary with the levels of the inherited metadata files   
+
+    Examples
+    --------
+
+    Load the data and metadata for some recording from a BIDS
+    dataset stored on your computer 
+
+    >>> from muniverse.utils.bids_routines import EMGBIDSRecording
+    >>> emg_recording = EMGBIDSRecording(
+    ...     root="/this/is/the/path/to/some_bids_dataset/",
+    ...     subject_label="01",
+    ...     task_label="isometric20percentmvc"
+    ... )
+    >>> emg_recording.read() 
+
+    Add a recording to your BIDS dataset and curate the recording-level
+    data and metadata
+
+    >>> import numpy as np
+    >>> fsamp = 2048
+    >>> rng = np.random.default_rng(42)
+    >>> data = rng.standard_normal((3, int(fsamp * 5)))  
+    >>> emg_sidecar = {
+    ...     "EMGPlacementScheme": "other", 
+    ...     "EMGPlacementSchemeDescription": "Lorem ipsum, ...", 
+    ...     "EMGReference": "monopolar",
+    ...     "SoftwareFilters": "n/a", 
+    ...     "RecordingType": "contineous"
+    ... }
+    >>> channels = {
+    ...     "name": ["Ch01", "Ch02", "Ch03"],
+    ...     "type": ["EMG", "EMG", "EMG"],
+    ...     "unit": ["mV", "mV", "mV"]
+    ... }
+    >>> emg_recording = EMGBIDSRecording(
+    ...     root=root="/this/is/the/path/to/some_bids_dataset/",
+    ...     subject_label="01",
+    ...     task_label="rest"
+    ... )
+    >>> emg_recording.set_metadata(
+    ...     field_name="emg_sidecar", source=emg_sidecar
+    ... )   
+    >>> emg_recording.set_metadata(
+    ...     field_name="channels", source=channels
+    ... )  
+    >>> emg_recording.set_data(
+    ...     field_name="data",
+    ...     mydata=data,
+    ...     fsamp=fsamp
+    ... )
+    >>> emg_recording.write()    
 
     Links
     -----

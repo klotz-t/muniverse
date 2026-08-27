@@ -141,6 +141,15 @@ class AEDecoder:
     """
     Class implementing unsupervised, autoencoder-based EMG decomposition 
 
+    - Transform the convolutive mixture into an instantaneous mixture 
+        by adding ``(R-1)`` delayed copies of the input signal
+    - Apply a whitening transformation to the extended signals to 
+        obtain data with unit variance
+    - Fit an autoencoder model to the whitened data, whereby the latent 
+        variables are assumed spiking motor neuron activity  
+    - Apply a peak detection algorithm to idendify motor unit spikes
+        given the latent variables    
+        
     Parameters
     ----------
     spike_detection_exp : float , default 2
@@ -242,7 +251,21 @@ class AEDecoder:
 
     Examples
     --------
-    TODO Showcase API
+    
+    Run AE Decomposition with the default parameters
+
+    >>> from muniverse.algorithms.ae_decomposer import AEDecoder
+    >>> model = AEDecoder()
+    >>> spikes, sources, scores = model.fit_predict(sig=emg_data, fsamp=2048)
+
+    Run AE Decomposition using the specified parameters
+
+    >>> model = AEDecoder(
+    ...     latent_dim=10,
+    ...     ext_fact=10,
+    ...     batch_size=4096
+    ... )
+    >>> spikes, sources, scores = model.fit_predict(sig=emg_data, fsamp=2048)
 
     """
     def __init__(
@@ -568,6 +591,9 @@ class AEDecoder:
             fsamp: float
     ):
         """
+        Learn the unmixing weights of a convolutive mixture 
+        and predict spiking motor neuron activity
+
         Parameters
         ----------
         sig : np.ndarray 

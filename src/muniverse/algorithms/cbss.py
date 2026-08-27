@@ -410,10 +410,22 @@ class FastIcaCBSS(_BaseCBSS):
     Examples
     --------
 
-    Init FastIcaCBSS class using the default parameters and run decomposition.
+    Run FastIcaCBSS using the default parameters
+
+    >>> from muniverse.algorithms.cbss import FastIcaCBSS
     >>> model = FastIcaCBSS() 
     >>> spikes, sources, scores = model.fit_predict(sig=emg_data, fsamp=2048)
 
+    Set parameters and run a decomposition
+
+    >>> model = FastIcaCBSS(
+    ...     ext_fact=16,
+    ...     ica_iterations=50,
+    ...     ica_opt_fun_exp=3.2,
+    ...     peel_off=True,
+    ...     ica_orthogonalization=None,
+    ... ) 
+    >>> spikes, sources, scores = model.fit_predict(sig=emg_data, fsamp=2048)
 
     """
 
@@ -504,7 +516,8 @@ class FastIcaCBSS(_BaseCBSS):
                   fsamp: float
     ):
         """
-        Run CBSS decomposition
+        Learn the unmixing weights of a convolutive mixture and predict
+        spiking motor neuron activity
 
         Parameters
         ----------

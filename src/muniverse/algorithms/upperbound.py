@@ -17,80 +17,99 @@ class UpperBoundCBSS(_BaseCBSS):
     of known ground-truth motor unit response waveforms.
 
     - Transform the convolutive mixture into an instantaneous mixture 
-    by adding R delayed copies of the input signal
+        by adding ``(R-1)`` delayed copies of the input signal
     - Apply a whitening transformation to the extended signals to 
-    obtain data with unit variance
+        obtain data with unit variance
     - Obtain for each motor unit the optimal unmixing weights it's 
-    impulse response waveform 
+        impulse response waveform 
     - Extract the motor unit spikes using peak-detection and 
-    spike clustering
+        spike clustering
 
-    Properties
+    Parameters
     ----------
-        ext_fact : int , default 12
-            Extension factor
+    ext_fact : int , default 12
+        Extension factor
 
-        whitening_method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
-            Method used for whitening
+    whitening_method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
+        Method used for whitening
 
-        whitening_backend : {"ed", "svd"}, default "ed" 
-            Method used to calculate eigenvalues and eigenvectors. Can be
-            either based on singular value decomposition ("svd") or an
-            eigendecomposition ("ed"). Only needed if method is "ZCA" or "PCA". 
+    whitening_backend : {"ed", "svd"}, default "ed" 
+        Method used to calculate eigenvalues and eigenvectors. Can be
+        either based on singular value decomposition ("svd") or an
+        eigendecomposition ("ed"). Only needed if method is "ZCA" or "PCA". 
 
-        whitening_regularization : {"auto", float, None}, default "auto" 
-            Adds a small value to the eigenvalues for regularization. 
-            If "auto", the mean of the second half of the eigenvalues is used.
+    whitening_regularization : {"auto", float, None}, default "auto" 
+        Adds a small value to the eigenvalues for regularization. 
+        If "auto", the mean of the second half of the eigenvalues is used.
 
-        spike_detection_exp : float , default 2
-            Exponent of asymetric power law applied to the extracted sources
-            before spike detection
+    spike_detection_exp : float , default 2
+        Exponent of asymetric power law applied to the extracted sources
+        before spike detection
 
-        spike_detection_min_delay : float , default 0.01
-            Minimum distance between two detected spikes in seconds  
+    spike_detection_min_delay : float , default 0.01
+        Minimum distance between two detected spikes in seconds  
 
-        win_alpha : float , default 0 
-            Shape parameter of a Tukey window (representing the fraction of the window 
-            inside the cosine tapered region) that is applied to the MUAPs
-            to minimize edge effects. If zero, the Tukey window is equivalent to a 
-            rectangular window. If one, the Tukey window is equivalent to a Hann window. 
+    win_alpha : float , default 0 
+        Shape parameter of a Tukey window (representing the fraction of the window 
+        inside the cosine tapered region) that is applied to the MUAPs
+        to minimize edge effects. If zero, the Tukey window is equivalent to a 
+        rectangular window. If one, the Tukey window is equivalent to a Hann window. 
 
-        verbose : float , default True
-            If True, print progress. 
+    verbose : float , default True
+        If True, print progress. 
 
     Attributes
     ----------
-        unmixing_weights_ : np.ndarray (n_features, n_components)
-            The learned unmixing weights
+    unmixing_weights_ : np.ndarray (n_features, n_components)
+        The learned unmixing weights
 
-        whiten_ : np.ndarray (n_features, n_features)
-            Whitening matrix   
+    whiten_ : np.ndarray (n_features, n_features)
+        Whitening matrix   
 
-        unwhiten_ : np.ndarray (n_features, n_features)
-            Inverse of the whitening matrix  
+    unwhiten_ : np.ndarray (n_features, n_features)
+        Inverse of the whitening matrix  
 
-        expected_amplitudes_ : np.ndarray 
-            For each motor unit impulse response and each delay the expected 
-            spike amplitude. The algorithm selects for each motor unit
-            the maximum value.  
+    expected_amplitudes_ : np.ndarray 
+        For each motor unit impulse response and each delay the expected 
+        spike amplitude. The algorithm selects for each motor unit
+        the maximum value.  
 
     References
     ----------
+
     .. [1] Klotz and Rohlen, "Revisiting convolutive blind source separation 
            for identifying spiking motor neuron activity: from theory to 
            practice", Journal of Neural Engineering, 2025 
+           
     .. [2] Mamidanna et et al., "MUniverse: A Simulation and Benchmarking 
            Suite for Motor Unit Decomposition", The Thirty-ninth Annual 
            Conference on Neural Information Processing Systems 
            Datasets and Benchmarks Track, 2025                    
 
 
-    Example
-    -------
+    Examples
+    --------
 
-    Init UpperBoundCBSS class using the default parameters and run decomposition.
+    Run the upper bound CBSS decomposition given multi-channel EMG data
+    of shape ``(n_channels, n_samples)`` and the corresponding motor
+    unit action potential waveforms of shape ``(n_units, n_channels, n_samp_muap)``
+
+    >>> from muniverse.algorithms.upperbound import UpperBoundCBSS
     >>> model = UpperBoundCBSS() 
-    >>> spikes, sources, scores = model.fit_predict(sig=emg_data, muaps=muaps, fsamp=2048)        
+    >>> spikes, sources, scores = model.fit_predict(
+    ...     sig=emg_data, muaps=muaps, fsamp=2048
+    ... )
+
+    Run the upper bound CBSS decomposition using the specified parameters
+
+    >>> model = UpperBoundCBSS(
+    ...     ext_fact=16,
+    ...     whitening_methods="ZCA",
+    ...     whitening_backend="ed"
+    ... )
+    >>> spikes, sources, scores = model.fit_predict(
+    ...     sig=emg_data, muaps=muaps, fsamp=2048
+    ... )        
 
     """
 
@@ -148,23 +167,23 @@ class UpperBoundCBSS(_BaseCBSS):
         Estimate the spike response of motor neurons given the
         motor unit impulse response waveforms (MUAPs)
 
-        Args
-        ----
-            sig : np.ndarray 
-                Input data (n_channels, n_samples)
-            muaps : np.ndarray 
-                Impulse response waveforms (n_units, n_channels, n_samples)
-            fsamp : float
-                 Sampling rate in Hz
+        Parameters
+        ----------
+        sig : np.ndarray 
+            Input data (n_channels, n_samples)
+        muaps : np.ndarray 
+            Impulse response waveforms (n_units, n_channels, n_samples)
+        fsamp : float
+            Sampling rate in Hz
 
         Returns
         -------
-            spikes : pd.DataFrame 
-                Spike table (columns: onset, duration, sample, unit_id, description)
-            sources : np.ndarray 
-                Estimated sources (n_components, n_samples)
-            scores : dict of np.ndarray 
-                Source trustworthiness scores ("sil" and "cov_isi") 
+        spikes : pd.DataFrame 
+            Spike table (columns: onset, duration, sample, unit_id, description)
+        sources : np.ndarray 
+            Estimated sources (n_components, n_samples)
+        scores : dict of np.ndarray 
+            Source trustworthiness scores ("sil" and "cov_isi") 
         
         """
 
@@ -224,17 +243,17 @@ class UpperBoundCBSS(_BaseCBSS):
         and whitened. The optimal unmixing weight corresponds to the column 
         of the extended and whitened MUAP that has the highest norm.
 
-        Args
-        ----
-            muap : np.ndarray 
-                Impulse response waveform (n_channels x n_samples)
-            i : int
-                Current iteration
+        Parameters
+        ----------
+        muap : np.ndarray 
+            Impulse response waveform (n_channels x n_samples)
+        i : int
+            Current iteration
 
         Returns
         -------
-            w : np.ndarray 
-                Optimal unmixing weights 
+        w : np.ndarray 
+            Optimal unmixing weights 
 
         """
 

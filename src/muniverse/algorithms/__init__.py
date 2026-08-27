@@ -22,7 +22,7 @@ def init():
     -------
     engine : str 
         The selected container engine ("docker" or "singularity")
-        
+
     """
     # Check availability of both engines
     docker_available = verify_container_engine("docker")
@@ -105,6 +105,84 @@ def decompose_recording(
     Note
     ----
         For UpperBound decomposition, use decompose_upperbound(...) directly.
+
+    Examples
+    --------
+
+    Run CBSS decomposition using the default parameters
+
+    >>> from muniverse.algorithms import decompose_recording
+    >>> results, log_data = decompose_recording(
+    ...     data=emg_data,
+    ...     fsamp=2048,
+    ...     method="cbss",
+    ... )
+
+    Run SCD in a container and using the default parameters
+
+    >>> results, log_data = decompose_recording(
+    ...     data=emg_data,
+    ...     fsamp=2048,
+    ...     method="scd",
+    ...     container="path/to/muniverse_scd.sif",
+    ...     engine="singularity"
+    ... ) 
+
+    Run AE decomposition using the default parameters
+    
+        >>> results, log_data = decompose_recording(
+        ...     data=emg_data,
+        ...     fsamp=2048,
+        ...     method="ae",
+        ... )
+
+    Run CBSS decomposition using the specified parameter
+
+    1. Preprocessing by applying a band pass filter
+    2. Run the CBSS decomposition with an extension factor of 12 
+        and 10 ICA iterations
+    3. Remove duplicate spike trains and sources with a silhouette-like
+        score below 0.9
+
+    >>> cfg = {
+    ...     "preProcessingConfig": [
+    ...         {
+    ...             "step": "bandpass",
+    ...             "high_pass": 20,
+    ...             "low_pass": 500,
+    ...             "method": "butter",
+    ...             "order": 2
+    ...         }
+    ...     ],
+    ...     "algorithmConfig": {
+    ...         "ext_fact": 12,
+    ...         "ica_iterations": 10
+    ...     },
+    ...     "postProcessingConfig": [
+    ...         {
+    ...             "step": "remove_duplicates",
+    ...             "max_shift": 0.01,
+    ...             "tolerance": 0.001,
+    ...             "threshold": 0.3,
+    ...             "quality_metric": "sil",
+    ...             "mode": "max"
+    ...         },
+    ...         {
+    ...             "step": "bad_source_detection",
+    ...             "quality_metric": "sil",
+    ...             "threshold": 0.9,
+    ...             "min_spikes": 10,
+    ...             "mode": "below"
+    ...         }
+    ...     ]
+    ... }
+    >>> results, log_data = decompose_recording(
+    ...     data=emg_data,
+    ...     fsamp=2048,
+    ...     method="cbss",
+    ...     algorithm_config=cfg
+    ... )
+
     """
 
     # Check input data
