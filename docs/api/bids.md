@@ -1,10 +1,6 @@
-# EMG-BIDS
+# EMG-BIDS Routines
 
-## Background
-
-This is some text on BIDS-EMG...
-
-## API Reference
+::: muniverse.utils.bids_routines.run_bids_validator
 
 ::: muniverse.utils.bids_routines.BIDSDataset
 
