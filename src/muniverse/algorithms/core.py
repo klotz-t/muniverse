@@ -311,6 +311,7 @@ def notch_signals(
 
     Parameters
     ----------
+
     data : np.ndarray
         Input data of shape ``(n_channels, n_samples)``
     fsamp : float 
@@ -327,6 +328,7 @@ def notch_signals(
 
     Returns
     -------
+
     data : np.ndarray 
         Filtered data of shape ``(n_channels, n_samples)``
 
@@ -501,7 +503,31 @@ def find_outliers(
     -------
     mask : np.ndarray (n_features, )
         Boolean mask (True: outlier, False: no outlier)
-        
+
+    Examples
+    --------
+
+    Generate random numbers from a standard normal distribution
+    and add one outlier. 
+
+    >>> import numpy as np
+    >>> from muniverse.algorithms.core import find_outliers
+    >>> rng = np.random.default_rng(42)
+    >>> X = rng.standard_normal(20)
+    >>> X[0] = 100
+    >>> find_outliers(X, threshold=3, max_iter=1, mode="two_sided")
+    array([True, False, False, False, False, False, False, 
+        False, False, False, False, False, False, False, False, 
+        False, False, False, False, False])
+
+    Now consider only ousiders on the left side of the distribution  
+
+    >>> find_outliers(X, threshold=3, max_iter=1, mode="below") 
+    array([False, False, False, False, False, False, False, 
+        False, False, False, False, False, False, False, False, 
+        False, False, False, False, False]) 
+
+
     """
 
     if mask is None:
@@ -1144,7 +1170,7 @@ def get_bad_source_mask(
     mode : {"below", "above"} , default "below"         
         Weather values below or above the threshold are
         considered bad
-    min_number_of_spikes : int
+    min_num_spikes : int
         Minimum number of spikes required for a good source
 
     Returns
@@ -1152,6 +1178,39 @@ def get_bad_source_mask(
     keep_mask : np.ndarray 
         Boolean mask with shape ``(n_units ,)``;
         True: keep source; False: reject source 
+
+    Examples
+    --------
+
+    Make 10 spikes correspodning to two units with quality 
+    score of 0.89 and 0.93. We want to reject all units
+    with a score below 0.9 and less than 3 spikes    
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from muniverse.algorithms.core import get_bad_source_mask
+    >>> rng = np.random.default_rng(42)
+    >>> spikes = {
+    ...     "onset": np.arange(10),
+    ...     "duration": np.zeros(10),
+    ...     "unit_id": rng.integers(0, 2, 10)
+    ... }   
+    >>> spikes = pd.DataFrame(spikes)
+    >>> spikes["unit_id"].to_numpy()
+    array([0, 1, 1, 0, 0, 1, 0, 1, 0, 0])
+    >>> scores = np.array([0.89, 0.93])
+    >>> get_bad_source_mask(
+    ... spikes, scores, threshold=0.9, mode="below", min_num_spikes=3
+    ... )
+    array([False,  True])
+
+    Now we want to reject units with less than 5 spikes and a score 
+    below 0.87
+
+    >>> get_bad_source_mask(
+    ... spikes, scores, threshold=0.87, mode="below", min_num_spikes=5
+    ... )
+    array([True, False])
 
     """
 
