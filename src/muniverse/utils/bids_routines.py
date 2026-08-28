@@ -1224,8 +1224,8 @@ class EMGBIDSNeuromotionRecording(EMGBIDSRecording):
     Inherits from EMGBIDSRecording and adds support for additional 
     simulation-specific files.
 
-    Extra Attributes
-    ----------------
+    Parameters
+    ----------
 
     spikes : pd.DataFrame
         Table of the simulated (ground truth) motor unit spike labels
@@ -1270,10 +1270,10 @@ class EMGBIDSNeuromotionRecording(EMGBIDSRecording):
         """
         Save dataset in BIDS format
 
-        Args
-        ----
-            overwrite : bool , default False
-                Whether to overwrite already existing files or not 
+        Parameters
+        ----------
+        overwrite : bool , default False
+            Whether to overwrite already existing files or not 
 
         """
         # Call parent's write method to handle standard BIDS files

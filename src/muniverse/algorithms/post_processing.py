@@ -26,6 +26,13 @@ from ..evaluation.evaluate import (
 class PostProcessSpikes:
     """
     Class to post process motor unit spike trains.
+    Availible processing steps are
+    - Reject bad sources
+    - Remove duplicate spike trains
+    - Calculate additional spike-based metrics
+    - Validate your decomposition results against 
+        some ground truth / reference decomposition
+
 
     Parameters
     ----------
@@ -33,93 +40,14 @@ class PostProcessSpikes:
         List of post processing steps. Each step is a dictionary describing
         the processing operation.
 
-    Processing Steps
-    ----------------
+    Examples
+    --------
 
-    **Remove Duplicates**: Automatically detect duplicates in your spike trains.
-    The parameter "max_shift" denotes the maximum delay between two spike
-    trains (in seconds), "tolerance" (in seconds) is the window in which 
-    two spikes are considered idendical, "threshold" is the fraction of 
-    spikes required to consider two spike trains belonging to the same
-    unit. The "mode" determines which source to keep. If "first", the 
-    first unit is kept. If "min" or "max" the selection is based on the
-    specified "quality_metric". The "window" parameter alows to consider 
-    only spikes in the selected time frame and "description" is a 
-    message used for logging::
+    Post decomposition outputs by removing duplicates and 
+    rejecting bad sources
 
-        {
-            "step": "remove_duplicates",
-            "max_shift": float, # default 0.01
-            "tolerance": float, # default 0.001
-            "threshold": float, # default 0.3
-            "quality_metric": str, # default "sil"
-            "mode": "max" | "min" | "first", # default "max"
-            "window": tuple, # default (0, -1),
-            "description": str # default "Duplicate source"
-        }
-
-    **Bad Source Detection**: Automatically detect bad sources based 
-    on a "quality_metric" and the specified "theshold". Further, you 
-    can specify a minimum number of required spikes ("min_spikes")
-    and "mode" specifies wheather to keep units above or below the
-    specified theshold. Further, "description" is a message used for logging::  
-
-        {
-            "step": "bad_source_detection",
-            "quality_metric": str, # default "sil"
-            "threshold_value": float, # default 0.9
-            "min_spikes": int, # default 10
-            "mode": "below" | "above", # default "below"
-            "description": str, # default "Below quality threshold"
-        } 
-
-    **Get Discharge Metric**: Calculate a spike-based metric that provides 
-    insights on the physiological pluasibility of a detected spike train.
-    Implemented metrics are the mean firing rate, the median firing rate,
-    the cofficient of variation of the interspike intervalls and the 
-    coefficient of dispersion of the interspike intervalls. Outlier spikes 
-    can be exluded based on statistical outlieres or fixed thresholds::
-
-        {
-            "step": "get_discharge_metric",
-            "metric": "mean_fr" | "med_fr" | "cov_isi" | "cod_isi" , # default "mean_fr"
-            "window": tuple | None, # default None
-            "reject_outliers": bool, # default False
-            "rejection_method": "zscore" | "threshold", # default "zscore"
-            "rejection_threshold": float, # default 3
-            "rejection_mode": "above" | "below" | "two-sided" # dfault "above" 
-        }        
-
-    **Mask Sources**: Mask all sources given in "sources_list" 
-    to be excluded in the following. Can be either used to reject 
-    known bad sources or limit the analysis to a subset of your data::  
-
-        {
-            "step": "mask_sources",
-            "source_list": list[int] # Default []
-            "description": str, # default "Manually masked" 
-        }
-
-    **Validate Prediction**: Validate the predicted spike trains given some
-    reference spikes. The parameter "tol" is the maximum delay (in seconds)
-    to mark two spikes idendical, "max_shift" ist the maximum global 
-    delay between two spike trains (in seconds) and "threshold" is the 
-    minimum fraction of common spikes that two spike trains are considered
-    to be the same::  
-
-        {
-            "step": "validate_prediction",
-            "t_start": float, # default 0
-            "t_end": float, # default -1
-            "tol": float, # default 0.001
-            "max_shift": float, # default 0.1
-            "threshold": float, # default 0.3
-        }    
-
-    Examples:
-    ---------
-    Post decomposition outputs by removing duplicates and rejecting bad sources.
-    >>> model = post_processing(steps = [
+    >>> from muniverse.algorithms.post_processing import PostProcessSpikes
+    >>> model = PostProcessSpikes(steps = [
     ...     {
     ...         "step": "remove_duplicates",
     ...         "max_shift": 0.01,
@@ -136,29 +64,18 @@ class PostProcessSpikes:
     ...         "mode": "below"
     ...     },
     ... ])
-    >>> out = model.post_process(...)                     
+    >>> out = model.post_process(
+    ...     spikes=spikes,
+    ...     fsamp=2048,
+    ...     sources=sources,
+    ...     scores=scores
+    ... )                     
 
     """
 
     def __init__(
             self, 
-            steps: list[dict] = [
-                {  
-                    "step": "remove_duplicates",
-                    "max_shift": 0.01,
-                    "tolerance": 0.001,
-                    "theshold": 0.3,
-                    "quality_metric": "sil",
-                    "mode": "max"
-                },
-                {
-                    "step": "bad_source_detection",
-                    "quality_metric": "sil",
-                    "threshold": 0.9,
-                    "min_spikes": 10,
-                    "mode": "below"
-                }    
-            ]     
+            steps: list[dict] = []     
     ):
 
         self.steps = [
@@ -167,6 +84,59 @@ class PostProcessSpikes:
         ]
 
     class RemoveDuplicates(BaseModel):
+        """
+        Automatically detect duplicates in your spike trains.
+
+        Parameters
+        ----------
+        max_shift : float , default 0.01
+            maximum delay between two spike trains (in seconds) 
+        tolerance : float , default 0.001
+            Two-sided window (in seconds) in which two spikes are 
+            considered idendical 
+        threshold : float , default 0.3
+            Fraction of spikes required to consider two spike trains 
+            corresponding to the same unit 
+        mode : {"max", "min", "fisrt"} , default "max" 
+            Determines which source to keep. If "first", the 
+            first unit is kept. If "min" or "max" the selection is based on the
+            specified ``quality_metric``
+        quality_metric : str , default "sil"
+            Source quality metric used to select the best estimate of 
+            sources that are considered idendical
+        window : tuple , default (0, -1) 
+            Consider only spikes in the specified intervall (in seconds).
+            If -1, the largest spike time is used as the end of the intervall 
+        description : str , default "Duplicate source" 
+            String used during logging 
+
+        Examples
+        --------
+
+        Reject duplicate units and always keep the one with the
+        highest silhouette-like score
+
+        >>> from muniverse.algorithms.post_processing import PostProcessSpikes
+        >>> step = {
+        ...     "step": "remove_duplicates",
+        ...     "max_shift": 0.01, 
+        ...     "tolerance": 0.001, 
+        ...     "threshold": 0.3, 
+        ...     "quality_metric": "sil",
+        ...     "mode": "max",
+        ...     "window": (0, -1),
+        ...     "description": "Duplicate source"
+        ... }
+        >>> model = PostProcessSpikes()
+        >>> model.add_step(step)
+        >>> out = model.post_process(
+        ...     spikes=spikes,
+        ...     fsamp=2048,
+        ...     sources=sources,
+        ...     scores=scores
+        ... ) 
+
+        """
         step: Literal["remove_duplicates"]
         max_shift: float = 0.01
         tolerance: float = 0.001
@@ -177,6 +147,56 @@ class PostProcessSpikes:
         description: str = "Duplicate source"
 
     class GetDischargeMetric(BaseModel):
+        """
+        Calculate a spike-based metric that provides insights 
+        on the physiological pluasibility of a detected spike train.
+        Implemented metrics are the mean firing rate ("mean_fr"), 
+        the median firing rate ("med_fr"),
+        the cofficient of variation of the interspike intervalls ("cov_isi") 
+        and the coefficient of dispersion of the interspike intervalls ("cod_isi"). 
+        Outlier spikes can be exluded to improve the robustness of
+        the method. 
+
+        Parameters
+        ----------
+
+        metric : {"mean_fr", "med_fr", "cov_isi", "cod_isi"} , default "mean_fr"
+            Metric to be calculated
+        window : {tuple, None} , default None
+            Only consider the selected time interval (in seconds) to
+            calculate the specified metric
+        reject_outliers : bool , default False
+            Whether to reject outliers or not
+        rejection_method : {"zscore", "threshold"} , default "zscore"
+            If ``zscore``, the metric is zscore normalized prior
+            to outlier detection. If ``theshold``outliers are detected
+            based on a fixed theshold. 
+        rejection threshold : float , default 3
+            Threshold value used to detect outliers
+        rejection_mode : {"above", "below", "two-sided"} , default "above"
+            Whether an outlier is considered for values above or below 
+            the given threshold. If the rejection method is ``zscore" you 
+            can also reject outliers on both ends of the distribution.
+
+        Examples
+        --------
+
+        Calcualte the mean dicharge rate of each unit
+
+        >>> from muniverse.algorithms.post_processing import PostProcessSpikes
+        >>> step = {
+        ...     "step": "get_discharge_metric",
+        ...     "metric": "mean_fr",
+        ... }
+        >>> model = PostProcessSpikes()
+        >>> model.add_step(step)
+        >>> out = model.post_process(
+        ...     spikes=spikes,
+        ...     fsamp=2048,
+        ...     sources=sources,
+        ...     scores=scores
+        ... ) 
+        """
         step: Literal["get_discharge_metric"]
         metric: Literal["cov_isi", "cod_isi", "mean_fr", "med_fr"] = "mean_fr"
         window: tuple[float, float] | None = None
@@ -186,6 +206,49 @@ class PostProcessSpikes:
         rejection_mode: Literal["above", "below", "two-sided"] = "above"    
 
     class BadSourceDetection(BaseModel):
+        """
+        Automatically detect bad sources 
+
+        Parameters
+        ----------
+
+        quality_metric : str , default "sil"
+            Quality metric used to detect bad sources
+        theshold : float , default 0.9 
+            Threshold value to seperate good and bad sources
+        mode : {"below", "above"} , default "below"
+            specifies whether to keep units above or below the
+            specified theshold
+        min_spikes : int , default 10
+            Only accept a unit if it has a minimum number of spikes
+        description : str , default "Below quality threshold" 
+            String used during logging  
+
+        Examples
+        --------
+
+        Reject all sources with a silhouette-like score below 0.89
+        and less than 15 spikes
+
+        >>> from muniverse.algorithms.post_processing import PostProcessSpikes
+        >>> step = {
+        ...     "step": "bad_source_detection",
+        ...     "quality_metric": "sil", 
+        ...     "threshold_value": 0.89,
+        ...     "min_spikes": 15,
+        ...     "mode": "below",
+        ...     "description": "Below quality threshold"
+        ... }
+        >>> model = PostProcessSpikes()
+        >>> model.add_step(step)
+        >>> out = model.post_process(
+        ...     spikes=spikes,
+        ...     fsamp=2048,
+        ...     sources=sources,
+        ...     scores=scores
+        ... ) 
+        
+        """
         step: Literal["bad_source_detection"]
         quality_metric: str = "sil"
         threshold: float = 0.9
@@ -194,11 +257,98 @@ class PostProcessSpikes:
         description: str = "Below quality threshold"
 
     class MaskSources(BaseModel):
+        """
+        Mask all sources given in "sources_list" 
+        to be excluded in the following. Can be either used to reject 
+        known bad sources or limit the analysis to a subset of your data
+
+        Parameters
+        ----------
+
+        source_list : list of int , default []
+            List of unit_ids that should be rejected
+        description : str , default "Manually masked"     
+            Free-text describing why the unit has been rejected 
+            and which is stored in the processing metadata 
+
+        Examples
+        --------
+
+        Reject unit 5 and 7 for further analysis
+
+        >>> from muniverse.algorithms.post_processing import PostProcessSpikes
+        >>> step = {
+        ...     "step": "mask_sources",
+        ...     "source_list": [5, 7],
+        ...     "description": "Irregular firing unit" 
+        ... }
+        >>> model = PostProcessSpikes()
+        >>> model.add_step(step)
+        >>> out = model.post_process(
+        ...     spikes=spikes,
+        ...     fsamp=2048,
+        ...     sources=sources,
+        ...     scores=scores
+        ... ) 
+        
+        """
         step: Literal["mask_sources"]
         unit_ids: list[int] = []  
         description: str = "Manually masked"   
 
     class ValidateSpikePrediction(BaseModel):
+        """
+        Validate the predicted spike trains given some
+        reference spikes. The parameter "tol" is the maximum delay (in seconds)
+        to mark two spikes idendical, "max_shift" ist the maximum global 
+        delay between two spike trains (in seconds) and "threshold" is the 
+        minimum fraction of common spikes that two spike trains are considered
+        to be the same
+
+        Parameters
+        ----------
+
+        t_start : float , default 0
+            Only consider spikes after t_start (in seconds)
+        t_end : float , default -1
+            Only consider spikes before t_end (in seconds). If 
+            t_end is ``-1`` the largest spike time is used 
+        tol : float , default 0.001
+            Two spikes are considered the same if they appear within 
+            the given two-sided toleance window (in seconds)
+        max_shift : float , default 0.1
+            Align the spike trains prior to spike matching in 
+            a two-sided window with the maximum delay specified in seconds
+        threshold : float , default 0.3
+            Two spike trains are considered the same if they share
+            the specified fraction of common spikes
+
+        Examples
+        --------
+
+        Validate you decomposition based on existing ground truth
+        spikes stored in ``reference_spikes``
+
+        >>> from muniverse.algorithms.post_processing import PostProcessSpikes
+        >>> model = PostProcessSpikes()
+        >>> step = {
+        ...     "step": "validate_prediction",
+        ...     "t_start": 5.0, 
+        ...     "t_end": 25.0, 
+        ...     "tol": 0.001,
+        ...     "max_shift": 0.1, 
+        ...     "threshold": 0.3
+        ... }
+        >>> model.add_step(step)
+        >>> out = model.post_process(
+        ...     spikes=spikes,
+        ...     fsamp=2048,
+        ...     sources=sources,
+        ...     scores=scores,
+        ...     ground_truth=reference_spikes
+        ... ) 
+        
+        """
         step: Literal["validate_prediction"]
         t_start: float = 0
         t_end: float = -1
@@ -221,7 +371,16 @@ class PostProcessSpikes:
     _adapter = TypeAdapter(PostProcessStep)
 
     def add_step(self, step):
-        """ Add an additional post processing step"""
+        """ 
+        Add an additional post processing step
+        
+        Parameters
+        ----------
+        step : dict
+            Dictonary of the processing step that is
+            added to your processing pipeline
+        
+        """
         
         self.steps.append(
             self._adapter.validate_python(step)
@@ -240,32 +399,32 @@ class PostProcessSpikes:
         """
         Compute spike-based metrics
 
-        Args
-        ----
-            spikes : pd.DataFrame
-                Table of motor unit spikes    
-            metric: {"cov_isi", "cod_isi", "mean_fr", "med_fr"}
-                Metric to be computed  
-            window : tuple or None
-                Time window used to calculate the given metric     
-            reject_outliers : bool
-                If True, outlier spikes are removed to calculate 
-                the given metric     
-            rejection_method : {"zscore", "threshold"}
-                Method used to detect outlier spikes. If "zscore" 
-                scores are z-score normalized prior to thresholding.
-            rejection_threshold : float
-                Treshold for bad spike detection
-            mode : {"above", "below", "two-sided"} , default "above"
-                If "above" flag all values above the threshold;
-                If "below" flag all values below the threshold;
-                If "two-sided" (only availible if method = "zscore"), flag all 
-                channels with an absolute score above the threshold                    
+        Parameters
+        ----------
+        spikes : pd.DataFrame
+            Table of motor unit spikes    
+        metric: {"cov_isi", "cod_isi", "mean_fr", "med_fr"}
+            Metric to be computed  
+        window : tuple or None
+            Time window used to calculate the given metric     
+        reject_outliers : bool
+            If True, outlier spikes are removed to calculate 
+            the given metric     
+        rejection_method : {"zscore", "threshold"}
+            Method used to detect outlier spikes. If "zscore" 
+            scores are z-score normalized prior to thresholding.
+        rejection_threshold : float
+            Treshold for bad spike detection
+        mode : {"above", "below", "two-sided"} , default "above"
+            If "above" flag all values above the threshold;
+            If "below" flag all values below the threshold;
+            If "two-sided" (only availible if method = "zscore"), flag all 
+            channels with an absolute score above the threshold                    
 
         Returns
         -------
-            values : np.array
-                Array of spike-based metrics (n_units, )  
+        values : np.array
+            Array of spike-based metrics (n_units, )  
         
         """
 
@@ -439,29 +598,29 @@ class PostProcessSpikes:
         Post process decomposed motor unit spike trains
         specified list of steps.
 
-        Args
+        Parameters
         ----
-            data : np.ndarray (n_channels, n_samples)
-                EMG data 
-            spikes : pd.DataFrame
-                Table of motor unit spikes    
-            fsamp : float 
-                Sampling rate in Hz
-            scores : dict | None 
-                A Dictonary of source quality scores     
-            sources : np.ndarray (n_units, n_samples) | None 
-                The predicted sources
+        data : np.ndarray 
+            EMG data with shape ``(n_channels, n_samples)``
+        spikes : pd.DataFrame
+            Table of motor unit spikes    
+        fsamp : float 
+            Sampling rate in Hz
+        scores : dict | None 
+            A Dictonary of source quality scores     
+        sources : np.ndarray | None 
+            The predicted sources with shape ``(n_sources, n_samples)``
 
         Returns
         -------
-            spikes : pd.DataFrame
-                Table of motor unit spikes
-            sources : np.ndarray (n_units, n_samples)
-                The predicted sources / latents
-            score : dict
-                A dictonary of source quality scores    
-            metadata : dict
-                A dictonary of processing metadata     
+        spikes : pd.DataFrame
+            Table of motor unit spikes
+        sources : np.ndarray (n_units, n_samples)
+            The predicted sources / latents
+        score : dict
+            A dictonary of source quality scores    
+        metadata : dict
+            A dictonary of processing metadata     
         
         """
 
@@ -542,8 +701,19 @@ class PostProcessSpikes:
 class PostProcessCBSS(_BaseCBSS, PostProcessSpikes):
     """
     
-    Class to post process motor unit spike trains while
-    making use of the CBSS model 
+    Class to post process motor unit spike trains
+    within a CBSS model framework. Availible processing 
+    steps are
+    
+    - Reject bad sources
+    - Remove duplicate spike trains
+    - Calculate additional spike-based metrics
+    - Validate your decomposition results against 
+        some ground truth / reference decomposition 
+    - Apply learned unmixing weights to new segments of
+        multi-channel EMG data
+    - Suppervised learning of the unmixing weighs given
+        motor neuron discharge times
     
     Parameters
     ----------
@@ -553,137 +723,59 @@ class PostProcessCBSS(_BaseCBSS, PostProcessSpikes):
         the processing operation.
 
     ext_fact : int , default 12
-            Extension factor
+        Extension factor
 
-        whitening_method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
-            Method used for whitening
+    whitening_method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
+        Method used for whitening
 
-        whitening_regularization : {"auto", float, None}, default "auto" 
-            Adds a small value to the eigenvalues for regularization. 
-            If "auto", the mean of the second half of the eigenvalues is used.
+    whitening_regularization : {"auto", float, None}, default "auto" 
+        Adds a small value to the eigenvalues for regularization. 
+        If "auto", the mean of the second half of the eigenvalues is used.
 
-        whitening_backend : {"ed", "svd"}, default "ed" 
-            Method used to calculate eigenvalues and eigenvectors. Can be
-            either based on singular value decomposition ("svd") or an
-            eigendecomposition ("ed"). Only needed if method is "ZCA" or "PCA".    
+    whitening_backend : {"ed", "svd"}, default "ed" 
+        Method used to calculate eigenvalues and eigenvectors. Can be
+        either based on singular value decomposition ("svd") or an
+        eigendecomposition ("ed"). Only needed if method is "ZCA" or "PCA"    
 
-        spike_detection_exp : float , default 2
-            Exponent of asymetric power law applied to the extracted sources
-            before spike detection
+    spike_detection_exp : float , default 2
+        Exponent of asymetric power law applied to the extracted sources
+        before spike detection
 
-        spike_detection_min_delay : float , default 0.01
-            Minimum distance between two detected spikes in seconds  
+    spike_detection_min_delay : float , default 0.01
+        Minimum distance between two detected spikes in seconds  
 
-        verbose : bool , default True
-            Verbose mode       
+    verbose : bool , default True
+        Verbose mode   
 
-    Processing Steps
-    ----------------
+    Examples
+    --------
 
-    **Remove Duplicates**: Automatically detect duplicates in your spike trains.
-    The parameter "max_shift" denotes the maximum delay between two spike
-    trains (in seconds), "tolerance" (in seconds) is the window in which 
-    two spikes are considered idendical, "threshold" is the fraction of 
-    spikes required to consider two spike trains belonging to the same
-    unit. The "mode" determines which source to keep. If "first", the 
-    first unit is kept. If "min" or "max" the selection is based on the
-    specified "quality_metric". The "window" parameter alows to consider 
-    only spikes in the selected time frame and "description" is a 
-    message used for logging::
-
-        {
-            "step": "remove_duplicates",
-            "max_shift": float, # default 0.01
-            "tolerance": float, # default 0.001
-            "threshold": float, # default 0.3
-            "quality_metric": str, # default "sil"
-            "mode": "max" | "min" | "first", # default "max"
-            "window": tuple, # default (0, -1),
-            "description": str # default "Duplicate source"
-        }
-
-    **Bad Source Detection**: Automatically detect bad sources based 
-    on a "quality_metric" and the specified "theshold". Further, you 
-    can specify a minimum number of required spikes ("min_spikes")
-    and "mode" specifies wheather to keep units above or below the
-    specified theshold. Further, "description" is a message used for logging::  
-
-        {
-            "step": "bad_source_detection",
-            "quality_metric": str, # default "sil"
-            "threshold_value": float, # default 0.9
-            "min_spikes": int, # default 10
-            "mode": "below" | "above", # default "below"
-            "description": str, # default "Below quality threshold"
-        } 
-
-    **Get Discharge Metric**: Calculate a spike-based metric that provides 
-    insights on the physiological pluasibility of a detected spike train.
-    Implemented metrics are the mean firing rate, the median firing rate,
-    the cofficient of variation of the interspike intervalls and the 
-    coefficient of dispersion of the interspike intervalls. Outlier spikes 
-    can be exluded based on statistical outlieres or fixed thresholds::
-
-        {
-            "step": "get_discharge_metric",
-            "metric": "mean_fr" | "med_fr" | "cov_isi" | "cod_isi" , # default "mean_fr"
-            "window": tuple | None, # default None
-            "reject_outliers": bool, # default False
-            "rejection_method": "zscore" | "threshold", # default "zscore"
-            "rejection_threshold": float, # default 3
-            "rejection_mode": "above" | "below" | "two-sided" # dfault "above"     
+    Post process decomposition predictions by 
     
+    1.) Fit a CBSS model to the given spikes
 
-    **Mask Sources**: Mask all sources given in "sources_list" 
-    to be excluded in the following. Can be either used to reject 
-    known bad sources or limit the analysis to a subset of your data::  
+    2.) Reject bad sources below a silhouette score threshold
 
-        {
-            "step": "mask_sources",
-            "source_list": list[int] # Default []
-            "description": str, # default "Manually masked" 
-        }
+    >>> from muniverse.algorithms.post_processing import PostProcessSpikes
+    >>> model = PostProcessSpikes(steps = [
+    ...     {
+    ...         "step": "fit_from_spikes",
+    ...         "max_delay": 0.01, 
+    ...     },
+    ...     {
+    ...         "step": "bad_source_detection",
+    ...         "quality_metric": "sil",
+    ...         "threshold": 0.9,
+    ...         "min_spikes": 10,
+    ...         "mode": "below"
+    ...     },
+    ... ])
+    >>> out = model.post_process(
+    ...     data=emg_data
+    ...     spikes=spikes,
+    ...     fsamp=2048
+    ... )        
 
-    **Validate Prediction**: Validate the predicted spike trains given some
-    reference spikes. The parameter "tol" is the maximum delay (in seconds)
-    to mark two spikes idendical, "max_shift" ist the maximum global 
-    delay between two spike trains (in seconds) and "threshold" is the 
-    minimum fraction of common spikes that two spike trains are considered
-    to be the same::  
-
-        {
-            "step": "validate_prediction",
-            "t_start": float, # default 0
-            "t_end": float, # default -1
-            "tol": float, # default 0.001
-            "max_shift": float, # default 0.1
-            "threshold": float, # default 0.3
-
-    **Predict Spikes**: Use the learned unmixing weights to predict 
-    motor unit spikes in the time window specified by "t_start" and 
-    "t_end". If "rewhiten" is True the whitening maxtrix is recomputed 
-    based on the given data::
-
-        {
-            "step": "predict_spikes",
-            "rewhiten": bool, # default True
-            "t_start": float, # default 0
-            "t_end": float, # default -1   
-        }
-
-    **Fit From Spikes**: Supervised learning of the unmixing weights of a 
-    CBSS model given a set of motor unit spike labels (in the specified time 
-    window). The learned unmixing weights are then applied to the data.
-    The parameters "t_start" and "t_end" specify the considered time frame
-    and "max_delay" is the maximum delay (in seconds) alowed in the CBSS model::
-
-        {
-            "step": "fit_from_spikes",
-            "t_start": float, # default 0
-            "t_end": float, # default -1
-            "max_delay": float # default 0.01
-        
-        }        
     
     """
 
@@ -714,12 +806,97 @@ class PostProcessCBSS(_BaseCBSS, PostProcessSpikes):
         ]
 
     class PredictSpikes(BaseModel):
+        """
+        Predict motor unit spike trains given multi-channel 
+        EMG data using the given unmixing weights.
+
+        Parameters
+        ----------
+
+        rewhiten : bool , default True
+            If ``True``, the data is rewhitened based on the 
+            given data
+        t_start : float , default 0
+            Start time (in seconds) of the considered time window
+        t_end : float , default -1
+            End time (in seconds) of the considered time window.
+            If t_end = -1, the time of the last spike is used. 
+
+        Examples
+        --------
+
+        Use the unmixing weights learned during a steady isometric
+        contraction and apply the unmixing weights also to the ramp 
+        segments of a ramp and hold contarction 
+
+        >>> from muniverse.algorithms.post_processing import PostProcessCBSS
+        >>> steps = [{
+        ...     "step": "predict_spikes",
+        ...     "rewhiten": false,
+        ...     "t_start": 2.5,
+        ...     "t_end": 37.5 
+        ... }]
+        >>> model = PostProcessCBSS(
+        ...     steps=steps,
+        ...     ext_fact=16
+        ... )
+        >>> out = model.post_process(
+        ...     data=emg_data,
+        ...     spikes=spikes,
+        ...     fsamp=2048,
+        ...     unmixing_weights=my_weights,
+        ...     unmixing_format="white",
+        ...     whitening_matrix=my_whitening_matrix
+        ... )
+
+        
+        """
         step: Literal["predict_spikes"]
         rewhiten: bool = True
         t_start: float = 0
         t_end: float = -1 
 
     class FitFromSpikes(BaseModel):
+        """
+        Supervised learning of the unmixing weights of a 
+        CBSS model given a set of motor unit spike labels. 
+        The learned unmixing weights are then applied to the data.
+
+        Parameters
+        ----------
+
+        t_start : float , default 0
+            Start time (in seconds) of the considered time window
+        t_end : float , default -1
+            End time (in seconds) of the considered time window.
+            If t_end = -1, the time of the last spike is used. 
+        max_delay : float , default 0.01
+            Considers all delayed versions of the spike train given
+            the specified range and return the unmixing weights yielding
+            the highest silhouette-like score.
+
+        Examples
+        --------
+
+        Fit a CBSS model given multi-channel EMG data and motor unit
+        spike times 
+
+        >>> from muniverse.algorithms.post_processing import PostProcessCBSS
+        >>> steps = [{
+        ...     "step": "fit_from_spikes",
+        ...     "max_delay": 0.01, 
+        ... }]
+        >>> model = PostProcessCBSS(
+        ...     steps=steps,
+        ...     ext_fact=16
+        ... )
+        >>> out = model.post_process(
+        ...     data=emg_data,
+        ...     spikes=spikes,
+        ...     fsamp=2048
+        ... ) 
+
+        """   
         step: Literal["fit_from_spikes"]
         rewhiten: bool = True
         t_start: float = 0
@@ -779,35 +956,35 @@ class PostProcessCBSS(_BaseCBSS, PostProcessSpikes):
         Supervised fitting of a CBSS model given EMG
         data and motor unit spike labels
 
-        Args
+        Parameters
         ----
-            sig : np.ndarray (n_channels, n_samples)
-                EMG data matrix
+        sig : np.ndarray (n_channels, n_samples)
+            EMG data matrix
 
-            spikes : pd.DataFrame
-                Table of motor unit spike labels
+        spikes : pd.DataFrame
+            Table of motor unit spike labels
 
-            fsamp : float
-                Sampling rate in Hz
+        fsamp : float
+            Sampling rate in Hz
 
-            max_delay: float, default 0.01
-                Maximum delay in seconds that is considered for
-                finding the unmixing weights.   
+        max_delay: float, default 0.01
+            Maximum delay in seconds that is considered for
+            finding the unmixing weights.   
 
-            mask : np.ndarray of bool | None , default None
-                Boolean mask describing the unit stattus. If False,
-                the unit is neglected.     
+        mask : np.ndarray of bool | None , default None
+            Boolean mask describing the unit stattus. If False,
+            the unit is neglected.     
 
         Returns
         -------
-            spikes : pd.DataFrame 
-                Table of motor unit spikes (can be temporally shifted)
+        spikes : pd.DataFrame 
+            Table of motor unit spikes (can be temporally shifted)
 
-            sources : np.ndarray 
-                Estimated sources / ica components (n_components, n_samples)     
+        sources : np.ndarray 
+            Estimated sources / ica components (n_components, n_samples)     
 
-            scores : dict
-                Dictonary of source quality scores            
+        scores : dict
+            Dictonary of source quality scores            
         
         """
 
@@ -956,50 +1133,50 @@ class PostProcessCBSS(_BaseCBSS, PostProcessSpikes):
         Post process decomposed motor unit spike trains
         using the specified list of steps.
 
-        Args
+        Parameters
         ----
-            data : np.ndarray (n_channels x n_samples)
-                EMG data 
+        data : np.ndarray 
+            EMG data of shape ``(n_channels, n_samples)``
 
-            spikes : pd.DataFrame
-                Lits of motor unit spikes  
+        spikes : pd.DataFrame
+            Lits of motor unit spikes  
 
-            fsamp : float 
-                Sampling rate in Hz
+        fsamp : float 
+            Sampling rate in Hz
 
-            scores : dict | None , default None
-                Dictonary of source quality scores     
+        scores : dict | None , default None
+            Dictonary of source quality scores     
 
-            sources : np.ndarray | None , default None
-                The predicted sources (n_sources, n_samples)
+        sources : np.ndarray | None , default None
+            The predicted sources with shape ``(n_sources, n_samples)``
 
-            unmixing_weights: np.ndarray or None , default None
-                Weights of the unmixing matrix 
+        unmixing_weights: np.ndarray or None , default None
+            Weights of the unmixing matrix 
 
-            whitening_matrix : np.ndarray or None , default None
-                Whitening matrix 
+        whitening_matrix : np.ndarray or None , default None
+            Whitening matrix 
 
-            unmixing_format : {"white", "extended"} , default "white"    
-                Format in which the unmixing weights are provided
+        unmixing_format : {"white", "extended"} , default "white"    
+            Format in which the unmixing weights are provided
 
-            ground_truth : pd.DataFrame | None , default None
-                Optionally parse a dictonary of spike times to
-                validate your predictions.
+        ground_truth : pd.DataFrame | None , default None
+            Optionally parse a dictonary of spike times to
+            validate your predictions.
 
 
         Returns
         -------
-            spikes : pd.DataFrame
-                Table of motor unit spikes
+        spikes : pd.DataFrame
+            Table of motor unit spikes
 
-            sources : np.ndarray (n_units, n_samples)
-                The predicted sources / latents
+        sources : np.ndarray 
+            The predicted sources of shape ``(n_units, n_samples)``
 
-            score : dict
-                A dictonary of source quality scores   
+        score : dict
+            A dictonary of source quality scores   
 
-            metadata : dict
-                A dictonary of processing metadata     
+        metadata : dict
+            A dictonary of processing metadata     
            
         
         """

@@ -1,3 +1,9 @@
+"""
+High-level API to pre-process multi-channel
+EMG data
+
+"""
+
 import warnings
 import numpy as np
 import pandas as pd
@@ -108,14 +114,15 @@ class PreProcessEMG:
         bandpass filter
 
         >>> from muniverse.algorithms.pre_processing import PreProcessEMG
-        >>> steps = [{
+        >>> step = {
         ...     "step": "bandpass",
         ...     "high_pass": 20,
         ...     "low_pass": 500,
         ...     "method": "butter",
         ...     "order": 1
-        ... }]
-        >>> model = PreProcessEMG(steps=steps)
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
         >>> preprocessed_data, metadata = model.pre_process(
         ...     data=emg_data, fsamp=2048
         ... )
@@ -157,13 +164,14 @@ class PreProcessEMG:
         ``firwin2``filter
 
         >>> from muniverse.algorithms.pre_processing import PreProcessEMG
-        >>> steps = [{
+        >>> step = {
         ...     "step": "highpass",
         ...     "high_pass": 10,
         ...     "method": "firwin2",
         ...     "numtabs": 101
-        ... }]
-        >>> model = PreProcessEMG(steps=steps)
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
         >>> preprocessed_data, metadata = model.pre_process(
         ...     data=emg_data, fsamp=2048
         ... )
@@ -204,13 +212,14 @@ class PreProcessEMG:
         ``butterworth``filter
 
         >>> from muniverse.algorithms.pre_processing import PreProcessEMG
-        >>> steps = [{
+        >>> step = {
         ...     "step": "lowpass",
         ...     "low_pass": 450,
         ...     "method": "butter",
         ...     "order": 4
-        ... }]
-        >>> model = PreProcessEMG(steps=steps)
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
         >>> preprocessed_data, metadata = model.pre_process(
         ...     data=emg_data, fsamp=2048
         ... )
@@ -256,13 +265,14 @@ class PreProcessEMG:
         100 and 150 Hz harmonics using ``fft_nulling``
 
         >>> from muniverse.algorithms.pre_processing import PreProcessEMG
-        >>> steps = [{
+        >>> step = {
         ...     "step": "notch",
         ...     "freqs": [50, 100, 150],
         ...     "method": "fft_nulling",
         ...     "dfreq": 1 
-        ... }]
-        >>> model = PreProcessEMG(steps=steps)
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
         >>> preprocessed_data, metadata = model.pre_process(
         ...     data=emg_data, fsamp=2048
         ... )
@@ -325,15 +335,16 @@ class PreProcessEMG:
         signal amplitude 
 
         >>> from muniverse.algorithms.pre_processing import PreProcessEMG
-        >>> steps = [{
+        >>> step = {
         ...     "step": "bad_channel_detection",
         ...     "metric": "rms",
         ...     "method": "zscore"
         ...     "threshold_value": 3,
         ...     "mode": "below",
         ...     "description": "Flat channel detected"
-        ... }]
-        >>> model = PreProcessEMG(steps=steps)
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
         >>> preprocessed_data, metadata = model.pre_process(
         ...     data=emg_data, fsamp=2048
         ... )
@@ -368,12 +379,13 @@ class PreProcessEMG:
         to be bad channels
 
         >>> from muniverse.algorithms.pre_processing import PreProcessEMG
-        >>> steps = [{
+        >>> step = {
         ...     "step": "mask_channels",
         ...     "channel_list": [60, 61],
         ...     "description": "Manually detected bad channels"
-        ... }]
-        >>> model = PreProcessEMG(steps=steps)
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
         >>> preprocessed_data, metadata = model.pre_process(
         ...     data=emg_data, fsamp=2048
         ... )
@@ -399,11 +411,12 @@ class PreProcessEMG:
         Downsample a signal sampled at 10240 Hz to 2048 Hz
 
         >>> from muniverse.algorithms.pre_processing import PreProcessEMG
-        >>> steps = [{
+        >>> step = {
         ...     "step": "downsample",
         ...     "factor": 5 
-        ... }]
-        >>> model = PreProcessEMG(steps=steps)
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
         >>> preprocessed_data, metadata = model.pre_process(
         ...     data=emg_data, fsamp=2048
         ... )
@@ -429,12 +442,13 @@ class PreProcessEMG:
         analysis
 
         >>> from muniverse.algorithms.pre_processing import PreProcessEMG
-        >>> steps = [{
+        >>> step = {
         ...     "step": "time_window",
         ...     "t_start": 5.0,
         ...     "t_end": 25.0 
-        ... }]
-        >>> model = PreProcessEMG(steps=steps)
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
         >>> preprocessed_data, metadata = model.pre_process(
         ...     data=emg_data, fsamp=2048
         ... )
@@ -468,12 +482,13 @@ class PreProcessEMG:
         from 7.5 to 22.5 seconds
 
         >>> from muniverse.algorithms.pre_processing import PreProcessEMG
-        >>> steps = [{
+        >>> step = {
         ...     "step": "get_metric",
         ...     "metric":"medfreq",
         ...     "window": (7.5, 22.5)
-        ... }]
-        >>> model = PreProcessEMG(steps=steps)
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
         >>> preprocessed_data, metadata = model.pre_process(
         ...     data=emg_data, fsamp=2048
         ... )
@@ -504,11 +519,12 @@ class PreProcessEMG:
         a peel off window of 0.025 seconds
 
         >>> from muniverse.algorithms.pre_processing import PreProcessEMG
-        >>> steps = [{
+        >>> step = {
         ...     "step": "peel_off",
         ...     "window_size": 0.025 
-        ... }]
-        >>> model = PreProcessEMG(steps=steps)
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
         >>> preprocessed_data, metadata = model.pre_process(
         ...     data=emg_data, fsamp=2048, spikes=known_spikes
         ... )
@@ -536,7 +552,7 @@ class PreProcessEMG:
 
     def add_step(self, step):
         """ 
-        Add an additional post processing step
+        Add an additional pre processing step
         
         Parameters
         ----------
