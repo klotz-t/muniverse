@@ -1,1 +1,1 @@
-::: muniverse.algorithms.pre_processing.PreProcessEMG
+::: muniverse.algorithms.pre_processing

@@ -13,7 +13,9 @@ nav:
     - MUniverse Decomposition Algorithms: api/algorithms.md
     - EMG-BIDS I/O: api/bids.md
     - Pre-Processing Module: api/pre_processing.md
+    - Post-Processing Module: api/post_processing.md
     - Core: api/core.md
+    - Evaluation: api/evaluate.md
 
 theme:
   name: "material"

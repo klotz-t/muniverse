@@ -8,6 +8,8 @@
 
 ::: muniverse.algorithms.core.notch_signals
 
+::: muniverse.algorithms.core.find_outliers
+
 ::: muniverse.algorithms.core.extension
 
 ::: muniverse.algorithms.core.whitening

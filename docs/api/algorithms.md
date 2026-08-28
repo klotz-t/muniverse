@@ -1,9 +1,9 @@
 # Algorithms
 
-::: muniverse.algorithms.cbss.FastIcaCBSS
+::: muniverse.algorithms.cbss
 
-::: muniverse.algorithms.ae_decomposer.AEDecoder
+::: muniverse.algorithms.ae_decomposer
 
-::: muniverse.algorithms.upperbound.UpperBoundCBSS
+::: muniverse.algorithms.upperbound
 
 
