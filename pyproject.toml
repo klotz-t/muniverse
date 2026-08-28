@@ -53,7 +53,7 @@ dependencies = [
 
 [project.optional-dependencies]
 
-alg = [
+algs = [
     "swarm-contrastive-decomposition",
 ]
 
