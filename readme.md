@@ -73,12 +73,14 @@ from muniverse.algorithms import decompose_recording
 # Run decomposition using CBSS algorithm
 results, metadata = decompose_recording(
     data="path/to/emg_data.edf",
+    fsamp=2048,
     method="cbss"
 )
 
 # Or use SCD algorithm (requires container)
 results, metadata = decompose_recording(
     data="path/to/emg_data.edf",
+    fsamp=2048,
     method="scd",
     container="path/to/muniverse_scd.sif",
     engine="singularity"
