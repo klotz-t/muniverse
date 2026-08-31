@@ -15,6 +15,7 @@ from muniverse.algorithms import decompose_recording
 # Run decomposition using CBSS algorithm
 results, metadata = decompose_recording(
     data="path/to/emg_data.edf",
+    fsamp=2048,
     method="cbss"
 )
 
@@ -22,6 +23,7 @@ results, metadata = decompose_recording(
 results, metadata = decompose_recording(
     data="path/to/emg_data.edf",
     method="scd",
+    fsamp=2048,
     container="path/to/muniverse_scd.sif",
     engine="singularity"
 )

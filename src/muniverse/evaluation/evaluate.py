@@ -416,7 +416,7 @@ def pseudo_sil_score(
         Indices of predicted spike times
     fsamp : float 
         Sampling frequency in Hz
-    min_peak_distance_ms : float 
+    min_peak_dist : float 
         Minimum distance between peaks (for peak detection) in seconds
     match_dist : float 
         Window size (± s) around predicted spikes to exclude from background.
@@ -427,8 +427,29 @@ def pseudo_sil_score(
         Silhouette-like quality score
     background_spikes : np.ndarray 
         Indices of the background spikes
-    centroids : tuple 
-        Centrodis of the peak and noise cluster
+
+    Examples
+    --------
+
+    Generate a spiky signals as the superposition of random noise
+    and spikes. Then estimate a silhouette-like score to quantify 
+    the separation of the spikes and the peaks of the noise
+
+    >>> import numpy as np
+    >>> from muniverse.evaluation.evaluate import pseudo_sil_score
+    >>> fsamp = 2000
+    >>> rng = np.random.default_rng(42)  
+    >>> spikes = np.arange(int(fsamp * 1), int(fsamp * 4), 400)
+    >>> source = rng.standard_normal(int(fsamp * 5))
+    >>> source[spikes] += 10
+    >>> sil, background_spikes = pseudo_sil_score(
+    ...     source=source, 
+    ...     predicted_spikes=spikes,
+    ...     fsamp=fsamp,
+    ...     min_peak_dist=0.005
+    ... )
+    >>> sil
+    np.float64(0.9828631969056841)
     """
 
     spikes = np.asarray(spikes, dtype=int)
@@ -464,8 +485,8 @@ def pseudo_sil_score(
 
 
 def calc_pnr(
-        source: np.ndarray, # (n_samples, ) 
-        spikes_idx: np.ndarray # (n_spikes, ) 
+    source: np.ndarray, # (n_samples, ) 
+    spikes_idx: np.ndarray # (n_spikes, ) 
 ):
     """
     Calculate the pulse-to-noise ratio, i.e., a logarithmic measure of the amplitude of the
@@ -484,6 +505,24 @@ def calc_pnr(
         Pulse-to-noise ratio of a source
     noise_indices : np.ndarray 
         Array of indices associated with noise
+
+    Examples
+    --------
+
+    Generate a spiky signals as the superposition of random noise
+    and spikes. Then calcualte the pulse-to-noise ratio (PNR) to  
+    quantify the separation of the spikes from the noise
+
+    >>> import numpy as np
+    >>> from muniverse.evaluation.evaluate import pseudo_sil_score
+    >>> fsamp = 2000
+    >>> rng = np.random.default_rng(42)  
+    >>> spikes = np.arange(int(fsamp * 1), int(fsamp * 4), 400)
+    >>> source = rng.standard_normal(int(fsamp * 5))
+    >>> source[spikes] += 10
+    >>> pnr, _ = calc_pnr(source, spikes)
+    >>> pnr
+    np.float64(30.75737733809906)
 
     """
 

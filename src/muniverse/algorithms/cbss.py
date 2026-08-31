@@ -1,3 +1,9 @@
+"""
+Impementation of convolutive blind source separation
+for the idendification of spiking motor neuron activity
+
+"""
+
 import numpy as np
 from typing import List, Literal, Optional
 from .core import (
@@ -14,33 +20,33 @@ class _BaseCBSS():
     
     Base class for CBSS-based motor unit idendification
 
-    Properties
+    Parameters
     ----------
 
-        ext_fact : int , default 12
-            Extension factor
+    ext_fact : int , default 12
+        Extension factor
 
-        whitening_method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
-            Method used for whitening
+    whitening_method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
+        Method used for whitening
 
-        whitening_regularization : {"auto", float, None}, default "auto" 
-            Adds a small value to the eigenvalues for regularization. 
-            If "auto", the mean of the second half of the eigenvalues is used.
+    whitening_regularization : {"auto", float, None}, default "auto" 
+        Adds a small value to the eigenvalues for regularization. 
+        If "auto", the mean of the second half of the eigenvalues is used.
 
-        whitening_backend : {"ed", "svd"}, default "ed" 
-            Method used to calculate eigenvalues and eigenvectors. Can be
-            either based on singular value decomposition ("svd") or an
-            eigendecomposition ("ed"). Only needed if method is "ZCA" or "PCA".    
+    whitening_backend : {"ed", "svd"}, default "ed" 
+        Method used to calculate eigenvalues and eigenvectors. Can be
+        either based on singular value decomposition ("svd") or an
+        eigendecomposition ("ed"). Only needed if method is "ZCA" or "PCA".    
 
-        spike_detection_exp : float , default 2
-            Exponent of asymetric power law applied to the extracted sources
-            before spike detection
+    spike_detection_exp : float , default 2
+        Exponent of asymetric power law applied to the extracted sources
+        before spike detection
 
-        spike_detection_min_delay : float , default 0.01
-            Minimum distance between two detected spikes in seconds  
+    spike_detection_min_delay : float , default 0.01
+        Minimum distance between two detected spikes in seconds  
 
-        verbose : bool , default True
-            Verbose mode     
+    verbose : bool , default True
+        Verbose mode     
     
     """
 
@@ -259,7 +265,7 @@ class FastIcaCBSS(_BaseCBSS):
         kmeans++ based spike clustering
         - Refine the learned weights through self-supervised 
         learning (optional)
-        - Peel-off the contribution of detected sources (optional)
+        - Peel off the contribution of detected sources (optional)
 
     Parameters
     ----------

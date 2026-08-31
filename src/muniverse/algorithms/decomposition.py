@@ -1,9 +1,9 @@
 """
 High-level wrapper functions for EMG decomposition pipelines with logging.
 
-These functions never raise exceptions. They always return (results, log_data),
-even on failure. Failed decompositions return {"spikes": None, ...} with logs containing
-error details. Callers could check if results["spikes"] is None to detect failures.
+These functions never raise exceptions. They always return ``results`` and ``log_data``
+even on failure. Failed decompositions return ``{"spikes": None, ...}`` with logs containing
+error details. Callers could check if ``results["spikes"] is None`` to detect failures.
 """
 
 import json
@@ -38,7 +38,21 @@ except ImportError:
 
 
 def load_config(config_path: str) -> Dict[str, Any]:
-    """Load configuration from a JSON file."""
+    """
+    Load configuration from a JSON file
+
+    Parameters
+    ----------
+    config_path : str
+        Path to the config JSON file
+
+    Returns
+    -------
+    cfg : dict 
+        Dictonary cotaining your algorithm/pipeline configuration
+
+    
+    """
     with open(config_path, "r") as f:
         return json.load(f)
     
@@ -53,52 +67,59 @@ def decompose_scd(
     """
     API to run SCD decomposition using a container or a local installation.
 
-    Args
-    ----
-        data : np.ndarray
-            EMG data (n_channels, n_samples)
+    Parameters
+    ----------
+    data : np.ndarray
+        EMG data (n_channels, n_samples)
 
-        fsamp : float
-            Sampling rate in Hz
+    fsamp : float
+        Sampling rate in Hz
 
-        algorithm_config : dict 
-            Optional dictionary containing algorithm configuration
+    algorithm_config : dict 
+        Optional dictionary containing algorithm configuration
 
-        engine : {"docker", "singularity", "local"} , default "singularity"
-            Engine/container used to execute SCD. If "local" SCD is 
-            executed using your local installation (pip installed).
+    engine : {"docker", "singularity", "local"} , default "singularity"
+        Engine/container used to execute SCD. If "local" SCD is 
+        executed using your local installation (pip installed).
 
-        container : str
-             Path to container image
+    container : str
+            Path to container image
 
-        meta: dict 
-            Optional dictionary containing metadata for loging
+    meta: dict 
+        Optional dictionary containing metadata for loging
 
 
     Returns
     -------
-        results : dict
-            Dictonary with decomposition results containing
-                - data (np.ndarray): Pre-processed data
-                - spikes (pd.DataFrame): Table of motor unit spikes
-                - sources (np.ndarray): Predicted sources
-                - scores (dict): Source quality metrics
-                - pre_process_metadata (dict): Metadata correspoding to
-                pre processing steps (Optional)
-                - post_process_metadata (dict): Metadata correspoding to
-                post processing steps (Optional)
+    results : dict
+        Dictonary containing
 
-        log_data : dict
-            Dictionary with processing metadata    
+            data : np.ndarray
+                Pre-processed data with shape (n_channels, n_samples)
+            spikes : pd.DataFrame
+                Table of motor unit spikes
+            sources : np.ndarray 
+                Predicted sources with shape (n_sources, n_samples)
+            scores : dict 
+                Dictonary of source quality metrics
+            pre_process_metadata : dict
+                    Metadata correspoding to pre processing steps (Optional)
+            post_process_metadata : dict 
+                Metadata correspoding to post processing steps (Optional)
+
+    log_data : dict
+        Dictonary of processing metadata    
 
     References
     ----------
     .. [1] Grison et et al., "A Particle Swarm Optimised Independence Estimator 
            for Blind Source Separation of Neurophysiological Time Series",
            IEEE Transactions on Biomedical Engineering, 2024 
+
     .. [2] Grison et et al., "Unlocking the full potential of high-density surface EMG: 
            novel non-invasive high-yield motor unit decomposition",
-           The Journal of Physiology, 2025        
+           The Journal of Physiology, 2025     
+
     .. [3] Mamidanna et et al., "MUniverse: A Simulation and Benchmarking 
            Suite for Motor Unit Decomposition", The Thirty-ninth Annual 
            Conference on Neural Information Processing Systems 
@@ -245,38 +266,44 @@ def decompose_upperbound(
     """
     Run upperbound decomposition.
 
-    Args
-    ----
-        data : np.ndarray (n_channels, n_samples)
-            EMG data 
+    Parameters
+    ----------
+    data : np.ndarray 
+        EMG data with shape ``(n_channels, n_samples)`` 
 
-        muaps : np.ndarray (n_units, n_channels, n_samples)
-            Impulse response waveforms for each motor unit   
+    muaps : np.ndarray 
+        Impulse response waveforms for each motor unit   
+        with shape ``(n_units, n_channels, n_samples_muap)``
 
-        fsamp : float
-            Sampling rate in Hz     
+    fsamp : float
+        Sampling rate in Hz     
 
-        algorithm_config : dict (Optional) 
-            Dictonary with the pipeline configuration
+    algorithm_config : dict (Optional) 
+        Dictonary with the pipeline configuration
 
-        meta: dict (Optional)
-            Optional dictionary containing input data metadata for loging
+    meta: dict (Optional)
+        Optional dictionary containing input data metadata for loging
 
     Returns
     -------
-        results : dict
-            Dictonary containing
-                - data (np.ndarray): Pre-processed data
-                - spikes (pd.DataFrame): Table of motor unit spikes
-                - sources (np.ndarray): Predicted sources
-                - scores (dict): Source quality metrics
-                - pre_process_metadata (dict): Metadata correspoding to
-                pre processing steps (Optional)
-                - post_process_metadata (dict): Metadata correspoding to
-                post processing steps (Optional)
+    results : dict
+        Dictonary containing
 
-        log : dict
-            Dictonary of processing metadata        
+            data : np.ndarray
+                Pre-processed data with shape (n_channels, n_samples)
+            spikes : pd.DataFrame
+                Table of motor unit spikes
+            sources : np.ndarray 
+                Predicted sources with shape (n_sources, n_samples)
+            scores : dict 
+                Dictonary of source quality metrics
+            pre_process_metadata : dict
+                    Metadata correspoding to pre processing steps (Optional)
+            post_process_metadata : dict 
+                Metadata correspoding to post processing steps (Optional)
+
+    log_data : dict
+        Dictonary of processing metadata
  
     """
     # Initialize logger
@@ -428,9 +455,9 @@ def decompose_cbss(
     pre and post processing steps.
 
     Parameters
-    ----
+    ----------
     data : np.ndarray 
-        EMG data (n_channels, n_samples)
+        EMG data of shape ``(n_channels, n_samples)``
 
     fsamp : float
         Sampling rate in Hz     
@@ -444,16 +471,20 @@ def decompose_cbss(
     Returns
     -------
     results : dict
-        Dictonary containing::
-        
-            - data (np.ndarray): Pre-processed data
-            - spikes (pd.DataFrame): Table of motor unit spikes
-            - sources (np.ndarray): Predicted sources
-            - scores (dict): Source quality metrics
-            - pre_process_metadata (dict): Metadata correspoding to
-            pre processing steps (Optional)
-            - post_process_metadata (dict): Metadata correspoding to
-            post processing steps (Optional)
+        Dictonary containing
+    
+            data : np.ndarray
+                Pre-processed data with shape (n_channels, n_samples)
+            spikes : pd.DataFrame
+                Table of motor unit spikes
+            sources : np.ndarray 
+                Predicted sources with shape (n_sources, n_samples)
+            scores : dict 
+                Dictonary of source quality metrics
+            pre_process_metadata : dict
+                    Metadata correspoding to pre processing steps (Optional)
+            post_process_metadata : dict 
+                Metadata correspoding to post processing steps (Optional)
 
     log_data : dict
         Dictonary of processing metadata        
@@ -562,35 +593,40 @@ def decompose_ae(
     """
     Run Autoencoder-based decomposition.
 
-    Args
-    ----
-        data : np.ndarray 
-            EMG data (n_channels, n_samples)
+    Parameters
+    ----------
+    data : np.ndarray 
+        EMG data of shape ``(n_channels, n_samples)``
 
-        fsamp: float
-            Sampling rate in Hz
+    fsamp: float
+        Sampling rate in Hz
 
-        algorithm_config : dict (Optional) 
-            Dictonary with the pipeline configuration
+    algorithm_config : dict (Optional) 
+        Dictonary with the pipeline configuration
 
-        meta: dict (Optional)
-            Optional dictionary containing input data metadata for logging
+    meta: dict (Optional)
+        Optional dictionary containing input data metadata for logging
 
     Returns
     -------
-        results : dict
-            Dictonary containing
-                - data (np.ndarray): Pre-processed data
-                - spikes (pd.DataFrame): Table of motor unit spikes
-                - sources (np.ndarray): Predicted sources
-                - scores (dict): Source quality metrics
-                - pre_process_metadata (dict): Metadata correspoding to
-                pre processing steps (Optional)
-                - post_process_metadata (dict): Metadata correspoding to
-                post processing steps (Optional)
+    results : dict
+        Dictonary containing
 
-        log_data : dict
-            Dictonary of processing metadata        
+            data : np.ndarray
+                Pre-processed data with shape (n_channels, n_samples)
+            spikes : pd.DataFrame
+                Table of motor unit spikes
+            sources : np.ndarray 
+                Predicted sources with shape (n_sources, n_samples)
+            scores : dict 
+                Dictonary of source quality metrics
+            pre_process_metadata : dict
+                    Metadata correspoding to pre processing steps (Optional)
+            post_process_metadata : dict 
+                Metadata correspoding to post processing steps (Optional)
+
+    log_data : dict
+        Dictonary of processing metadata
 
 
     """
@@ -697,41 +733,46 @@ def ensemble_decomposition(
     """
     Run ensemble decomposition.
 
-    Args
-    ----
-        data : np.ndarray 
-            EMG data (n_channels, n_samples)
+    Parameters
+    ----------
+    data : np.ndarray 
+        EMG data with shape ``(n_channels, n_samples)``
 
-        fsamp: float
-            Sampling rate in Hz
+    fsamp: float
+        Sampling rate in Hz
 
-        algorithm_config : dict (Optional) 
-            Dictonary with the pipeline configuration
+    algorithm_config : dict (Optional) 
+        Dictonary with the pipeline configuration
 
-        meta: dict (Optional)
-            Optional dictionary containing input data metadata for logging
+    meta: dict (Optional)
+        Optional dictionary containing input data metadata for logging
 
-        outpath : str (Optional)
-            Folder where the outputs of the base decompositions are stored
+    outpath : str (Optional)
+        Folder where the outputs of the base decompositions are stored
 
-        basename : str (Optional)
-            Name for the base decomposition output         
+    basename : str (Optional)
+        Name for the base decomposition output         
 
     Returns
     -------
-        results : dict
-            Dictonary containing
-                - data (np.ndarray): Pre-processed data
-                - spikes (pd.DataFrame): Table of motor unit spikes
-                - sources (np.ndarray): Predicted sources
-                - scores (dict): Source quality metrics
-                - pre_process_metadata (dict): Metadata correspoding to
-                pre processing steps (Optional)
-                - post_process_metadata (dict): Metadata correspoding to
-                post processing steps (Optional)
+    results : dict
+        Dictonary containing
 
-        log_data : dict
-            Dictonary of processing metadata        
+            data : np.ndarray
+                Pre-processed data with shape (n_channels, n_samples)
+            spikes : pd.DataFrame
+                Table of motor unit spikes
+            sources : np.ndarray 
+                Predicted sources with shape (n_sources, n_samples)
+            scores : dict 
+                Dictonary of source quality metrics
+            pre_process_metadata : dict
+                    Metadata correspoding to pre processing steps (Optional)
+            post_process_metadata : dict 
+                Metadata correspoding to post processing steps (Optional)
+
+    log_data : dict
+        Dictonary of processing metadata        
 
 
     """

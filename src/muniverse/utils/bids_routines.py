@@ -1,5 +1,5 @@
 """
-Classes to read and write EMG-BIDS datasets
+Classes to read,curate and write EMG-BIDS datasets
 
 """
 
@@ -134,20 +134,20 @@ class BIDSDataset(_BaseBIDS):
         The name of a BIDS dataset
 
     readme : str
-        The README file of a BIDS dataset stored as a string    
+        The ``README`` file of a BIDS dataset stored as a string    
 
     dataset_sidecar : dict
-        Dictonary capturing the content of a *_dataset.json file  
+        Dictonary capturing the content of a ``*_dataset.json`` file  
 
     subjects_data : pd.DataFrame
-        Table with subject information and pre-defined columns 
-        "participant_id", "age", "sex", "handedness", "weight" and "height"
+        Table with subject information. Must icnlude a column
+        ``participant_id``.
 
     subjects_sidecar : dict 
-        Dictonary capturing the content of a *_subjects.json file 
+        Dictonary capturing the content of a ``*_subjects.json`` file 
 
     BIDSIGNORE : list of str , default []
-        List of ignored files    
+        List of files that are ignored by the BIDS validator  
 
     Examples
     --------
@@ -1227,6 +1227,77 @@ class EMGBIDSNeuromotionRecording(EMGBIDSRecording):
     Parameters
     ----------
 
+    root : str
+        The root folder of a BIDS dataset
+
+    datasetname : str
+        The name of a BIDS dataset
+
+    datapath : str
+        Folder where the recording file is/will be stored
+
+    subject_label : str , default "01"
+        Label of the subject the recording belongs to
+
+    session_label : str or None , default None
+        Label of the session the recording belongs to   
+
+    task_label : str , default "taskName"
+        Label of the task perfomed in this recording 
+
+    acq_label : str or None , default None
+        Label distnguish multiple aquisition modes 
+
+    run_label : str or None , default "01"
+        Label to distnguish multiple repetitions of the same task  
+
+    recording_label : str or None , default None 
+        Label to distnguish data files from different aquisition systems     
+
+    datatype : str , default "emg"
+        Type of data (for now always EMG) 
+
+    data : np.ndarray
+        Data matrx (n_channels, n_samples)  
+
+    fsamp : float
+        Sampling rate in Hz        
+
+    fileformat : {"edf", "bdf"} , default "edf"
+        File format used to store the data matrix 
+
+    emg_sidecar : dict
+        Dictonary corresponding to the "_emg.json" file    
+
+    channels : pd.DataFrame
+        Table with channel-specific metadata
+
+    channels_sidecar : dict
+        Dictonary corresponding to the "_channels.json" file        
+
+    electrodes : pd.DataFrame
+        Table with electrode-specific metadata   
+
+    electrodes_sidecar : dict
+        Dictonary corresponding to the "_electrodes.json" file   
+
+    coord_sidecar : dict of dict
+        Dictonary of dictonaries, whereby each key corresponds 
+        to one coordinate system  
+
+    events : pd.DataFrame
+        Table of events describing the experiment. Must contain
+        the columns "onset" and "duration"
+
+    events_sidecar : dict     
+        Dictonary corresponding to the "_events.json" file      
+
+    inherited_metadata : dict    
+        Dictonary of inherited metadata files
+
+    inherited_levels : dict    
+        Dictonary with the levels of the inherited metadata files
+
     spikes : pd.DataFrame
         Table of the simulated (ground truth) motor unit spike labels
 
@@ -1236,7 +1307,7 @@ class EMGBIDSNeuromotionRecording(EMGBIDSRecording):
         "fibre_density", "fibre_length", "conduction_velocity" and "angle"  
 
     internals : np.ndarray
-        Data matrix of internal states (n_states, n_samples)    
+        Data matrix of internal states of shape ``(n_states, n_samples)``    
 
     internals_sidecar : dict
         Dictonary describing the data matrix in internals  
@@ -1345,9 +1416,10 @@ class EMGBIDSNeuromotionRecording(EMGBIDSRecording):
 @dataclass
 class BIDSDecompositionDerivative(_BaseBIDS): 
     """
-    Class for handling decomposition outputs as BIDS-derivatives.
-    Note that while the implementation follows BIDS-derivative rules
-    the obtained outputs do not represent a standardized format.
+    Class for handling decomposition outputs as BIDS-derivative.
+    Note, the implementation follows BIDS-derivative specification, 
+    however, the obtained outputs do not represent a 
+    standardized format.
 
     Parameters
     ----------
@@ -1392,23 +1464,24 @@ class BIDSDecompositionDerivative(_BaseBIDS):
         Sampling rate in Hz    
 
     source : np.ndarray
-        Data matrix of the predicted sources (n_sources, n_samples)
+        Data matrix of the predicted sources 
+        with shape ``(n_sources, n_samples)``
 
     source_sidecar : dict     
-        Dictonary corresponding to the "_source.json" file             
+        Dictonary corresponding to the ``_source.json`` file             
 
     events : pd.DataFrame
         Table of motor unit spikes. Must contain
-        the columns "onset" and "duration"
+        the columns ``onset`` and ``duration``
 
     events_sidecar : dict     
-        Dictonary corresponding to the "_events.json" file         
+        Dictonary corresponding to the ``_events.json`` file         
 
     log : dict
         Dictonary of proecessing metadata
 
-    code : str
-        Path to the script/code generated this derivative        
+    code : list of str
+        Paths to the scripts/code that generated this derivative        
 
     inherited_metadata : dict    
         Dictonary of inherited metadata files
