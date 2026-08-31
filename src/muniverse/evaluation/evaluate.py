@@ -485,19 +485,28 @@ def pseudo_sil_score(
 
 
 def calc_pnr(
-    source: np.ndarray, # (n_samples, ) 
-    spikes_idx: np.ndarray # (n_spikes, ) 
+    source: np.ndarray, 
+    spikes_idx: np.ndarray,
+    win: int = 1 
 ):
     """
-    Calculate the pulse-to-noise ratio, i.e., a logarithmic measure of the amplitude of the
-    spike cluster compared to the background noise in a source.
+    Calculate the pulse-to-noise ratio, i.e., a logarithmic 
+    measure of the amplitude of the spikes compared 
+    to the background noise in an estimated spiky source
 
     Parameters
     ----------
     source : np.ndarray 
-        The predicted spiky source signal
+        The predicted "spiky" source signal with
+        shape ``(n_samples, )``
     spikes_idx : np.ndarray 
-        Array of spike indices predicted by a decomposition
+        Array of spike indices predicted by the 
+        decomposition with shape ``(n_spikes, )``
+    win : int , default 1
+        Number of samples next to a spike (in both
+        directions) that are considered to belong
+        to the spike cluster  
+
 
     Returns
     -------
@@ -533,7 +542,7 @@ def calc_pnr(
 
     expanded_indices = set()
     for idx in spikes_idx:
-        for neighbor in [idx - 1, idx, idx + 1]:
+        for neighbor in [idx - win, idx, idx + win]:
             if 0 <= neighbor < signal_length:
                 expanded_indices.add(neighbor)
 
