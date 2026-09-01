@@ -173,23 +173,23 @@ def bin_spikes(
     return spike_train
 
 
-def best_time_shift(
-    spikes1, spikes2, tolerance=0.001, max_shift=0.01, shift_step=0.0005
-):
-    """ Try multiple time shifts and return the one with maximum TP """
+# def best_time_shift(
+#     spikes1, spikes2, tolerance=0.001, max_shift=0.01, shift_step=0.0005
+# ):
+#     """ Try multiple time shifts and return the one with maximum TP """
 
-    best_tp = 0
-    best_shift = 0.0
-    best_fp, best_fn = 0, 0
+#     best_tp = 0
+#     best_shift = 0.0
+#     best_fp, best_fn = 0, 0
 
-    shifts = np.arange(-max_shift, max_shift + shift_step, shift_step)
-    for shift in shifts:
-        tp, fp, fn = match_spikes(spikes1, spikes2, shift, tolerance)
-        if tp > best_tp:
-            best_tp, best_fp, best_fn = tp, fp, fn
-            best_shift = shift
+#     shifts = np.arange(-max_shift, max_shift + shift_step, shift_step)
+#     for shift in shifts:
+#         tp, fp, fn = match_spikes(spikes1, spikes2, shift, tolerance)
+#         if tp > best_tp:
+#             best_tp, best_fp, best_fn = tp, fp, fn
+#             best_shift = shift
 
-    return best_tp, best_fp, best_fn, best_shift
+#     return best_tp, best_fp, best_fn, best_shift
 
 
 def max_xcorr(
@@ -281,6 +281,45 @@ def label_sources(
         new labels of the sources
     match_matrix : np.ndarray 
         matching scores between all pairs of sources
+
+    Examples
+    --------
+
+    Calculate the match matrix between two 
+    spike trains with one one common spike,
+    and two/one unique spikes per unit 
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from muniverse.evaluation.evaluate import label_sources
+    >>> spikes = pd.DataFrame({
+    ...     "onset": [0, 1, 1, 2, 3], 
+    ...     "duration": [0] * 5, 
+    ...     "unit_id": [0, 0, 1, 0, 1]
+    ... })
+    >>> labels, M = label_sources(
+    ...     spikes=spikes,
+    ...     fsamp=10,
+    ...     t_end=5,
+    ...     threshold=0.3
+    ... )
+    >>> labels
+    array([0, 0])
+    >>> M
+    array([[1.        , 0.33333333],
+           [0.33333333, 1.        ]])
+
+    Now we use a threshold of 0.5 to consider 
+    two spike trains belonging to the same unit
+
+    >>> labels, M = label_sources(
+        ...     spikes=spikes,
+        ...     fsamp=10,
+        ...     t_end=5,
+        ...     threshold=0.3
+        ... )  
+    >>> labels
+    array([0, 1])
 
     """
 
@@ -581,6 +620,25 @@ def get_basic_spike_statistics(
     mean_fr : float 
         Mean discharge rate of the neuron
 
+    Examples
+    --------
+
+    Make random spikes with a interspike dintervall of 0.1 seconds
+    and adding 10 % of random jitter (using a normal distribution).
+    Then compute the coefficient of variation of the interspike
+    intervalls and the mean firing rate
+
+    >>> import numpy as np
+    >>> from muniverse.evaluation.evaluate import get_basic_spike_statistics
+    >>> rng = np.random.default_rng(42)
+    >>> spike_times = np.arange(1, 10, 0.1)
+    >>> spike_times += rng.standard_normal(spike_times.shape[0]) * 0.01
+    >>> cov_isi, mean_fr = get_basic_spike_statistics(spike_times)
+    >>> cov_isi
+    np.float64(0.08630333780612401)
+    >>> mean_fr
+    np.float64(10.431066767944392)
+
     """
 
     cov = np.inf
@@ -614,7 +672,7 @@ def evaluate_spike_matches(
     pre_matched: bool = False,
 ):
     """
-    Match spiking motor unit activity between two data sets.
+    Match units between two sets of motor unit spike trains
 
     Parameters
     ----------
@@ -655,6 +713,36 @@ def evaluate_spike_matches(
     -------
     results : pd.DataFrame 
         Table of matched units
+
+    Examples
+    --------
+
+    Make two tables of motor unit spikes with one 
+    common unit (two common spikes, one individual spike)
+    and one independent unit per spike table (two spikes) 
+
+    - Idendify common units
+    
+    - Compute the number of matched and unmacthed spikes
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> spikes_1 = pd.DataFrame({
+    ...     "onset": [1, 2, 3, 4, 5], 
+    ...     "duration": [0] * 5, 
+    ...     "unit_id": [0, 0, 1, 0, 1]
+    ... })
+    >>> spikes_2 = pd.DataFrame({
+    ...     "onset": [0.5, 1, 2, 2.5, 4.1], 
+    ...     "duration": [0] * 5, 
+    ...     "unit_id": [1, 1, 0, 1, 0]
+    ... })
+    >>> evaluate_spike_matches(
+    ...     spikes_1, spikes_2, t_end=6, fsamp=10
+    ... )
+       unit_id  unit_id_ref  delay_seconds  TP  FN  FP
+    0        0          1.0            0.0   2   1   1
+    1        1          NaN            NaN   0   0   2
 
     """
 
