@@ -639,21 +639,21 @@ class FastIcaCBSS(_BaseCBSS):
                 and scores["cov_isi"][i] < self.peel_off_cov_th
                 ):
 
-                if False:
-                    white_sig, _, _ = peel_off(
-                        white_sig, spikes[i], win=self.peel_off_window, fsamp=fsamp
-                    )
-                else:
-                    ext_sig, _, _ = peel_off(
-                        ext_sig, spikes[i], win=self.peel_off_window, fsamp=fsamp
-                    )
-                    # C_new = ext_sig @ ext_sig.T / (ext_sig.shape[1] - 1)
-                    # for _ in range(3):
-                    #     self.whiten_ = 0.5 * self.whiten_ @ (
-                    #         3*np.eye(C_new.shape[0]) - C_new @ self.whiten_ @ self.whiten_
-                    #     )
-                    # white_sig = self.whiten_ @ ext_sig    
-                    white_sig = self._whitening(ext_sig)
+                # if False:
+                white_sig, _, _ = peel_off(
+                    white_sig, spikes[i], win=self.peel_off_window, fsamp=fsamp
+                )
+                # else:
+                #     ext_sig, _, _ = peel_off(
+                #         ext_sig, spikes[i], win=self.peel_off_window, fsamp=fsamp
+                #     )
+                #     # C_new = ext_sig @ ext_sig.T / (ext_sig.shape[1] - 1)
+                #     # for _ in range(3):
+                #     #     self.whiten_ = 0.5 * self.whiten_ @ (
+                #     #         3*np.eye(C_new.shape[0]) - C_new @ self.whiten_ @ self.whiten_
+                #     #     )
+                #     # white_sig = self.whiten_ @ ext_sig    
+                #     white_sig = self._whitening(ext_sig)
 
                 self.peel_off_[i] = True
                 if self.verbose:
