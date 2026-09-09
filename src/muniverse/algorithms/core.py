@@ -1115,6 +1115,30 @@ def get_duplicates_mask(
     new_labels : np.ndarray of int (n_units,)
         New label for each source   
 
+    Examples
+    --------
+
+    Consider two spike trains with two 
+    common spikes and one unique spikes 
+    per unit. The second unit has a higher
+    quality score
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from muniverse.algorithms.core import get_duplicates_mask
+    >>> spikes = pd.DataFrame({
+    ...     "onset": [0, 1, 1, 2, 2, 3], 
+    ...     "duration": [0] * 5, 
+    ...     "unit_id": [0, 0, 1, 0, 1, 1]
+    ... })
+    >>> scores = np.array([0.91, 0.93])
+    >>> mask, new_labels = get_duplicates_mask(
+    ...     spikes, scores, 10
+    ... )
+    >>> mask
+    array([False,  True])
+    >>> new_labels
+    array([0, 0])
 
     """
 
