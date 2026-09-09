@@ -817,8 +817,26 @@ def ensemble_decomposition(
         alg = cfg["baseModels"][cfg_idx]["method"]
         alg_cfg = cfg["baseModels"][cfg_idx]
 
+        # Propagate gloabl time sampling related pre processing steps
+        if pre_meta["steps"] is not None:
+            for step in pre_meta["steps"]:
+                if step["step"] == "time_window":
+                    alg_cfg["preProcessingConfig"].insert(0, step)
+                elif step["step"] == "artifact_rejection":
+                    alg_cfg["preProcessingConfig"].insert(0, step)
+                else:
+                    continue
+        # Propagate bad channels mask
+        if pre_meta["ch_mask"] is not None:
+            _channels = np.where(~pre_meta["ch_mask"])[0].tolist()
+            alg_cfg["preProcessingConfig"].insert(0, {
+                "step": "mask_channels",
+                "channels_list": _channels,
+                "description": "Rejected during global pre-processing"
+            })
+        
         if alg == "cbss":
-            res, log = decompose_cbss(segmented_data, pre_meta["fsamp"], alg_cfg)
+            res, log = decompose_cbss(data, pre_meta["fsamp"], alg_cfg)
             offset = 0
 
         elif alg == "scd":   
@@ -831,13 +849,13 @@ def ensemble_decomposition(
                 container = None
 
             res, log = decompose_scd(
-                segmented_data, pre_meta["fsamp"], alg_cfg,
+                data, pre_meta["fsamp"], alg_cfg,
                 engine=engine, container=container
             )   
             offset = 0
 
         elif alg == "ae":
-            res, log = decompose_ae(segmented_data, pre_meta["fsamp"], alg_cfg)
+            res, log = decompose_ae(data, pre_meta["fsamp"], alg_cfg)
             offset = 0
 
         # Get unified SIL scores between algorithms    
