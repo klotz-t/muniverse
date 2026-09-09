@@ -393,7 +393,38 @@ class PreProcessEMG:
         """ 
         step: Literal["mask_channels"]
         channel_list: list[int] = []  
-        description: str = "Manually masked channel"  
+        description: str = "Manually masked channel" 
+
+    class MaskSamples(BaseModel):
+        """
+        Mask all samples given in ``sample_list`` to be excluded in the following. 
+        Can be either used to reject known artifacts or limit the analysis to a 
+        subset of your data (e.g., only time samples corresponding to a task)
+
+        sample_list : list of int , default []
+            List of ignored channels
+            
+        Examples
+        --------
+
+        Remove the first second of the signal due to a 
+        motion artifact in the EMG data
+
+        >>> from muniverse.algorithms.pre_processing import PreProcessEMG
+        >>> fsamp = 2048
+        >>> step = {
+        ...     "step": "mask_samples",
+        ...     "sample_list": np.arange(fsamp).tolist()
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
+        >>> preprocessed_data, metadata = model.pre_process(
+        ...     data=emg_data, fsamp=fsamp
+        ... )
+
+        """ 
+        step: Literal["mask_samples"]
+        sample_list: list[int] = []  
 
     class Downsample(BaseModel):
         """
@@ -531,7 +562,49 @@ class PreProcessEMG:
 
         """ 
         step: Literal["peel_off"]
-        window_size: float = 0.02          
+        window_size: float = 0.02    
+
+    class ArtifactRejection(BaseModel):
+        """
+        Reject time samples that are associated with
+        artifacts
+
+        Parameters
+        ----------
+        artifact_times : list of float , default []
+            Time points at which an artifact was detected
+        before : float 
+            Time intervall before the artifact to be rejected
+        after : float 
+            Time intervall after the artifact to be rejected
+
+        Examples
+        --------
+
+        Reject a motion artifact detected at 10.2 seconds and 
+        reject 0.05 seconds of signal before and after the 
+        artifact event
+
+        >>> from muniverse.algorithms.pre_processing import PreProcessEMG
+        >>> step = {
+        ...     "step": "artifact_rejection",
+        ...     "artifact_time": [10.2],
+        ...     "before": 0.05,
+        ...     "after": 0.05
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
+        >>> preprocessed_data, metadata = model.pre_process(
+        ...     data=emg_data, fsamp=2048
+        ... )
+
+        
+        """
+
+        step: Literal["artifact_rejection"]
+        artifact_times : list[float] = []
+        before: float = 0.01
+        after: float = 0.01
 
     PreprocessStep = Annotated[
         Union[Bandpass, 
@@ -540,10 +613,12 @@ class PreProcessEMG:
             Notch, 
             BadChannelDetection, 
             MaskChannels, 
+            MaskSamples,
             Downsample,
             TimeWindow,
             GetMetric,
-            PeelOff
+            PeelOff,
+            ArtifactRejection
         ],
         Field(discriminator="step")
     ]  
@@ -784,6 +859,10 @@ class PreProcessEMG:
                     ch_status.loc[
                         ~local_mask, "status_description"
                     ] = step.description
+                elif isinstance(step, self.MaskSamples):
+                    local_mask = np.ones(data.shape[1], dtype=bool)
+                    local_mask[step.sample_list] = False
+                    sample_mask = sample_mask & local_mask
                 elif isinstance(step, self.BadChannelDetection):
                     if step.window is not None:
                         idx0 = int(step.window[0] * fsamp_new)
@@ -818,7 +897,8 @@ class PreProcessEMG:
                         t_end = (n_samples - 1) / fsamp
                     else:
                         t_end = step.t_end
-                    sample_mask = (t >= step.t_start) & (t <= t_end)
+                    local_mask = (t >= step.t_start) & (t <= t_end)
+                    sample_mask = sample_mask & local_mask
                     t_start = step.t_start
                 elif isinstance(step, self.GetMetric):
                     if step.window is not None:
@@ -847,6 +927,19 @@ class PreProcessEMG:
                             fsamp=fsamp_new,
                             method="sparse"
                         )    
+
+                elif isinstance(step, self.ArtifactRejection):
+                    for i in range(len(step.artifact_times)):
+                        start_idx = int(
+                            (step.artifact_times[i] - step.before) * fsamp
+                        )
+                        start_idx = max(0, start_idx)
+                        end_idx = int(
+                            (step.artifact_times[i] + step.after) * fsamp
+                        )
+                        end_idx = min(end_idx, data.shape[1])
+                        sample_mask[:, start_idx:end_idx] = False
+
                 else:
                     raise ValueError(
                         "Invalid step type"
