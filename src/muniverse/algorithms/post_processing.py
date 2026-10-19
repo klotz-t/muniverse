@@ -209,7 +209,7 @@ class PostProcessSpikes:
                           
     PostProcessStep = Annotated[
         Union[
-            RemoveDuplicates, 
+            RemoveDuplicates,
             GetDischargeMetric,
             BadSourceDetection,
             MaskSources,
