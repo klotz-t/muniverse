@@ -1,0 +1,65 @@
+site_name: muniverse-emg
+
+nav:
+  - Home: index.html
+  - Getting Started:
+    - Installation: getting_started/installation.md
+    - Quick Start: getting_started/quick_start.md
+  - Tutorials:
+    - Installation: tutorials/install.md
+    - Pre-Processing: tutorials/02_PreprocessData.ipynb
+  - API Reference: 
+    - Highlevel Decomposition API: api/decomposition_api.md
+    - MUniverse Decomposition Algorithms: api/algorithms.md
+    - EMG-BIDS I/O: api/bids.md
+    - Pre-Processing Module: api/pre_processing.md
+    - Post-Processing Module: api/post_processing.md
+    - Core: api/core.md
+    - Evaluation: api/evaluate.md
+
+theme:
+  name: "material"
+  palette:
+    - scheme: slate
+      primary: 'white'
+      accent: 'indigo'
+  font:
+    text: Open Sans
+    code: Fira Code    
+  collapse_navigation: False  
+
+markdown_extensions:
+  - extra
+  - smarty
+  - admonition
+  - attr_list
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+ 
+plugins:
+  - search
+  - mkdocs-jupyter
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: numpy
+            show_source: false
+            members_order: source
+            heading_level: 2
+            show_root_heading: true    
+            inherited_members: true
+            show_signature_annotations: false
+            separate_signature: false    
+
+
+
+
+
+ 
+    
+    

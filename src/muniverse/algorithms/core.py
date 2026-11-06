@@ -21,30 +21,61 @@ def bandpass_signals(
 ) -> np.ndarray:
     """
     Bandpass filter timeseries data using a digital infinite 
-    impulse  response filter ("butter") or finite impulse 
-    response filter ("firwin2").
+    impulse  response filter (``butter``) or finite impulse 
+    response filter (``firwin2``). To obtain a zero-phase response,
+    the filter is applied in forward and backward direction.
 
-    Args
-    ----
-        data : np.ndarray
-            Input data (n_channels x n_samples)
-        fsamp : float 
-            Sampling frequency in Hz
-        high_pass : float, default 20 
-            Cut-off frequency for the high-pass filter in Hz    
-        low_pass : float, default 500 
-            Cut-off frequency for the low-pass filter in Hz
-        method :  {"butter", "firwin2"}, default "butter"
-            Filter type
-        order : int | None, default 2 
-            Order of the filter (required for "butter") 
-        numtabs : int | None, default 101 
-            Number of filter tabs (required for firwin2)
+    Parameters
+    ----------
+
+    data : np.ndarray
+        Input data of shape ``(n_channels x n_samples)``
+    fsamp : float 
+        Sampling frequency in Hz
+    high_pass : float, default 20 
+        Cut-off frequency for the high-pass filter in Hz    
+    low_pass : float, default 500 
+        Cut-off frequency for the low-pass filter in Hz
+    method :  {"butter", "firwin2"}, default "butter"
+        Filter type
+    order : int | None, default 2 
+        Order of the filter (required if ``method==butter``) 
+    numtabs : int | None, default 101 
+        Number of filter tabs (required if ``method==firwin2``)
 
     Returns
     -------
-        data : np.ndarray  
-            filtered data (n_channels x n_samples)
+    data : np.ndarray  
+        filtered data of shape ``(n_channels, n_samples)``
+
+    Examples
+    --------
+    Generate 5 seconds of white Gaussian noise and obtain 
+    colored noise using a second order butterworth filter
+
+    >>> from muniverse.algorithms.core import bandpass_signals
+    >>> fsamp = 2048
+    >>> rng = np.random.default_rng(42)
+    >>> data = rng.standard_normal((3, int(fsamp*5))) 
+    >>> data_filt = bandpass_signals(
+    ...     data=data,
+    ...     fsamp=fsamp,
+    ...     high_pass=10,
+    ...     low_pass=450,
+    ...     method="butter",
+    ...     order=2
+    ... )
+
+    Filter the same data using a finite impulse response filter   
+
+    >>> data_filt = bandpass_signals(
+    ...     data=data,
+    ...     fsamp=fsamp,
+    ...     high_pass=10,
+    ...     low_pass=450,
+    ...     method="firwin2",
+    ...     numtabs=101
+    ... )
 
     """
 
@@ -94,25 +125,53 @@ def highpass_signals(
     impulse  response filter ("butter") or finite impulse 
     response filter ("firwin2").
 
-    Args
-    ----
-        data : np.ndarray
-            Input data (n_channels x n_samples)
-        fsamp : float 
-            Sampling frequency in Hz
-        high_pass : float, default 20 
-            Cut-off frequency for the high-pass filter in Hz    
-        method :  {"butter", "firwin2"}, default "butter"
-            Filter type
-        order : int | None, default 2 
-            Order of the filter (required for "butter") 
-        numtabs : int | None, default 101 
-            Number of filter tabs (required for firwin2)
+    Parameters
+    ----------
+    data : np.ndarray
+        Input data of shape ``(n_channels, n_samples)``
+    fsamp : float 
+        Sampling frequency in Hz
+    high_pass : float, default 20 
+        Cut-off frequency for the high-pass filter in Hz    
+    method :  {"butter", "firwin2"}, default "butter"
+        Filter type
+    order : int | None, default 2 
+        Order of the filter (required if ``method==butter``) 
+    numtabs : int | None, default 101 
+        Number of filter tabs (required if ``method==firwin2``)
 
     Returns
     -------
-        data : np.ndarray  
-            filtered data (n_channels x n_samples)
+    data : np.ndarray  
+        filtered data of shape ``(n_channels x n_samples)``
+
+    Examples
+    --------
+    Generate 5 seconds of white Gaussian noise and obtain 
+    colored noise using a second order butterworth filter
+
+    >>> from muniverse.algorithms.core import highpass_signals
+    >>> fsamp = 2048
+    >>> rng = np.random.default_rng(42)
+    >>> data = rng.standard_normal((3, int(fsamp*5))) 
+    >>> data_filt = highpass_signals(
+    ...     data=data,
+    ...     fsamp=fsamp,
+    ...     high_pass=10,
+    ...     method="butter",
+    ...     order=2
+    ... )
+
+    Filter the same data using a finite impulse response filter   
+
+    >>> data_filt = bandpass_signals(
+    ...     data=data,
+    ...     fsamp=fsamp,
+    ...     high_pass=10,
+    ...     method="firwin2",
+    ...     numtabs=101
+    ... )
+
 
     """
 
@@ -153,28 +212,55 @@ def lowpass_signals(
 ) -> np.ndarray:
     """
     Low-pass filter timeseries data using a digital infinite 
-    impulse  response filter ("butter") or finite impulse 
-    response filter ("firwin2").
+    impulse  response filter (``butter``) or finite impulse 
+    response filter (``firwin2``).
 
-    Args
-    ----
-        data : np.ndarray
-            Input data (n_channels x n_samples)
-        fsamp : float 
-            Sampling frequency in Hz  
-        low_pass : float, default 500 
-            Cut-off frequency for the low-pass filter in Hz
-        method :  {"butter", "firwin2"}, default "butter"
-            Filter type
-        order : int | None, default 2 
-            Order of the filter (required for "butter") 
-        numtabs : int | None, default 101 
-            Number of filter tabs (required for firwin2)
+    Parameters
+    ----------
+    data : np.ndarray
+        Input data of shape ``(n_channels, n_samples)``
+    fsamp : float 
+        Sampling frequency in Hz  
+    low_pass : float, default 500 
+        Cut-off frequency for the low-pass filter in Hz
+    method :  {"butter", "firwin2"}, default "butter"
+        Filter type
+    order : int | None, default 2 
+        Order of the filter (required if ``method==butter``) 
+    numtabs : int | None, default 101 
+        Number of filter tabs (required if ``method==firwin2``)
 
     Returns
     -------
-        data : np.ndarray  
-            filtered data (n_channels x n_samples)
+    data : np.ndarray  
+        filtered data of shape ``(n_channels, n_samples)``
+
+    Examples
+    --------
+    Generate 5 seconds of white Gaussian noise and obtain 
+    colored noise using a second order butterworth filter
+
+    >>> from muniverse.algorithms.core import lowpass_signals
+    >>> fsamp = 2048
+    >>> rng = np.random.default_rng(42)
+    >>> data = rng.standard_normal((3, int(fsamp*5))) 
+    >>> data_filt = lowpass_signals(
+    ...     data=data,
+    ...     fsamp=fsamp,
+    ...     low_pass=450,
+    ...     method="butter",
+    ...     order=2
+    ... )
+
+    Filter the same data using a finite impulse response filter   
+
+    >>> data_filt = lowpass_signals(
+    ...     data=data,
+    ...     fsamp=fsamp,
+    ...     low_pass=450,
+    ...     method="firwin2",
+    ...     numtabs=101
+    ... )    
 
     """
 
@@ -223,26 +309,59 @@ def notch_signals(
     for "fft_interpolation" the spectral amplitude is interpolated through by the 
     neighbourhood. Time series data is then recovered through an inverse fft.
 
-    Args
-    ----
-        data : np.ndarray) 
-            Input data (n_channels x n_samples)
-        fsamp : float 
-            Sampling frequency in Hz
-        freqs : list of float, default [50, 100, 150] 
-            List of frequencies to be notch filtered
-        method : {"butter", "iirnotch", "fft_nulling", "fft_interpolation"}, default "butter"
-            Filter type 
-        order : int or None, default 2
-            Order of the filter (if method is butter)
-        dfreq : float or None, default 1 
-            Width of the notch filter (in both directions) in Hz 
-            (if method is iirnotch, fft_nulling, fft_interpolation).
+    Parameters
+    ----------
+
+    data : np.ndarray
+        Input data of shape ``(n_channels, n_samples)``
+    fsamp : float 
+        Sampling frequency in Hz
+    freqs : list of float, default [50, 100, 150] 
+        List of frequencies to be notch filtered
+    method : {"butter", "iirnotch", "fft_nulling", "fft_interpolation"}, default "butter"
+        Filter type 
+    order : int or None, default 2
+        Order of the filter (if method is ``butter``)
+    dfreq : float or None, default 1 
+        Width of the notch filter (in both directions) in Hz 
+        (if method is iirnotch, fft_nulling, fft_interpolation).
 
     Returns
     -------
-        data : np.ndarray 
-            Filtered data (n_channels x n_samples)
+
+    data : np.ndarray 
+        Filtered data of shape ``(n_channels, n_samples)``
+
+    Examples
+    --------
+
+    Notch filter 50 Hz power line noise and two harmonics
+    using a second order butterworth filter
+
+    >>> from muniverse.algorithms.core import notch_signals
+    >>> fsamp = 2048
+    >>> rng = np.random.default_rng(42)
+    >>> data = rng.standard_normal((3, int(fsamp * 5))) 
+    >>> data_filt = notch_signals(
+    ...     data=data,
+    ...     fsamp=fsamp,
+    ...     freqs=[50, 100, 150],
+    ...     method="butter",
+    ...     order=2
+    ... )
+
+    Filter the same data by setting the fft to zero in the 
+    desired frequency band  
+
+    >>> data_filt = notch_signals(
+    ...     data=data,
+    ...     fsamp=fsamp,
+    ...     low_pass=[50, 100, 150],
+    ...     method="fft_nulling",
+    ...     dfreq=1
+    ... ) 
+
+
     """
 
     if isinstance(freqs, float) or isinstance(freqs, int):
@@ -364,27 +483,51 @@ def find_outliers(
     some threshold. This is repeaded until there are no outliers or
     the maximum number of iterations is reached. 
 
-    Args
-    ----
-        x : np.ndarray (n_features, )
-            Variable to test for outliers
-        threshold : float, default 3 
-            Threshold for outlier detection
-        max_iter: int , default 3
-             Maximum number of iterations
-        mode : {"above", "below", "two-sided"} , default "two-sided"
-            Specify weather to serach for outliers   
-            on both ends ("two-sided"), just on the positive ("above") 
-            or just the negative side ("below").
-        mask : np.ndarray | None , default None
-            Boolean mask to exclude channels from outlier detection
-            (True: outlier, False: no outlier)    
+    Parameters
+    ----------
+    x : np.ndarray 
+        Variable to test for outliers with shape ``(n_features, )``
+    threshold : float, default 3 
+        Threshold for outlier detection
+    max_iter: int , default 3
+            Maximum number of iterations
+    mode : {"above", "below", "two-sided"} , default "two-sided"
+        Specify weather to serach for outliers   
+        on both ends ("two-sided"), just on the positive ("above") 
+        or just the negative side ("below").
+    mask : np.ndarray | None , default None
+        Boolean mask to exclude channels from outlier detection
+        (True: outlier, False: no outlier)    
 
     Returns
     -------
-        mask : np.ndarray (n_features, )
-            Boolean mask (True: outlier, False: no outlier)
-        
+    mask : np.ndarray (n_features, )
+        Boolean mask (True: outlier, False: no outlier)
+
+    Examples
+    --------
+
+    Generate random numbers from a standard normal distribution
+    and add one outlier. 
+
+    >>> import numpy as np
+    >>> from muniverse.algorithms.core import find_outliers
+    >>> rng = np.random.default_rng(42)
+    >>> X = rng.standard_normal(20)
+    >>> X[0] = 100
+    >>> find_outliers(X, threshold=3, max_iter=1, mode="two_sided")
+    array([True, False, False, False, False, False, False, 
+        False, False, False, False, False, False, False, False, 
+        False, False, False, False, False])
+
+    Now consider only ousiders on the left side of the distribution  
+
+    >>> find_outliers(X, threshold=3, max_iter=1, mode="below") 
+    array([False, False, False, False, False, False, False, 
+        False, False, False, False, False, False, False, False, 
+        False, False, False, False, False]) 
+
+
     """
 
     if mask is None:
@@ -415,17 +558,34 @@ def extension(
     Extend a multi-channel signal Y by an extension factor R
     using Toeplitz matrices.
 
-    Args
-    ----
-        Y : np.ndarray 
-            Original signal (n_channels x n_samples)
-        R : int 
-            Extension factor (number of lags)
+    Parameters
+    ----------
+    Y : np.ndarray 
+        Input signal with shape ``(n_features x n_samples)``
+    R : int 
+        Extension factor (number of lags)
 
     Returns
     -------
-        eY : np.ndarray 
-            Extended signal (n_channels x (R * n_samples))
+    eY : np.ndarray 
+        Extended signal with shape ``(n_channels x (R * n_samples))``
+
+    Examples
+    --------
+
+    Make a simple test signal and extend it by a factor of 2:
+
+    >>> import numpy as np
+    >>> from muniverse.algorithms.core import extension
+    >>> Y = np.arange(8).reshape(2, 4)
+    >>> extension(Y, 2)
+    array([
+        [0, 1, 2, 3],
+        [0, 0, 1, 2],
+        [4, 5, 6, 7],
+        [0, 4, 5, 6]
+    ])
+
     """
     n_channels, n_samples = Y.shape
     eY = np.zeros((n_channels * R, n_samples)).astype(Y.dtype)
@@ -449,30 +609,65 @@ def whitening(
     """
     Whiten data using the ZCA, PCA, or Cholesky method.
 
-    Args
-    ----
-        Y : np.ndarray 
-            Input signal (n_channels x n_samples)
-        method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
-            Whitening method 
-        backend : {"ed", "svd"}, default "ed" 
-            Method used to calculate eigenvalues and eigenvectors. Can be
-            either based on singular value decomposition ("svd") or an
-            eigendecomposition ("ed"). Only needed if method is "ZCA" or "PCA".
-        regularization : {"auto", float, None}, default "auto" 
-            Adds a small value to the eigenvalues for regularization.
-            If "auto", the mean of the second half of the eigenvalues is used.
-        eps : float 
-            Small epsilon added to the eigenvalues for numerical stability
+    Parameters
+    ----------
+    Y : np.ndarray 
+        Input signal with shape ``(n_features x n_samples)``
+
+    method : {"ZCA", "PCA", "Cholesky"}, default "ZCA" 
+        Whitening method 
+
+    backend : {"ed", "svd"}, default "ed" 
+        Method used to calculate eigenvalues and eigenvectors. Can be
+        either based on singular value decomposition ("svd") or an
+        eigendecomposition ("ed"). Only needed if method is "ZCA" or "PCA".
+
+    regularization : {"auto", float, None}, default "auto" 
+        Adds a small value to the eigenvalues for regularization.
+        If "auto", the mean of the second half of the eigenvalues is used.
+
+    eps : float 
+        Small epsilon added to the eigenvalues for numerical stability
 
     Returns
     -------
-        wY : np.ndarray) 
-            Whitened signal (n_channels x n_samples)
-        Z : np.ndarray 
-            Whitening matrix (n_channels x n_channels)
-        Z_inv : np.ndarray 
-            Inverse of the whitening matrix (n_channels x n_channels)    
+    wY : np.ndarray)
+        Whitened signal with shape ``(n_features, n_samples)``
+
+    Z : np.ndarray 
+        Whitening matrix ``(n_features, n_features)``
+
+    Z_inv : np.ndarray 
+        Inverse of the whitening matrix ``(n_features, n_features)``    
+
+    Examples
+    --------
+
+    Perform ZCA whitening on a simple test signal
+    with analytical solution:
+    
+    >>> import numpy as np
+    >>> from muniverse.algorithms.core import whitening
+    >>> X = np.array([
+    ...     [1, -1, 0, 0], 
+    ...     [0, 0, 2, -2]
+    ... ])
+    >>> Xw_ref = np.array([
+    ...     [np.sqrt(3/2), -np.sqrt(3/2), 0, 0], 
+    ...     [0, 0, np.sqrt(3/2), -np.sqrt(3/2)]
+    ... ])
+    >>> Z_ref = np.array([
+    ...     [np.sqrt(3/2), 0],
+    ...     [0, np.sqrt(3/8)]
+    ... ])
+    >>> Xw, Z, Z_inv = whitening(X, 
+    ...     method="ZCA", backend="ed",
+    ...     regularization=None, eps=0
+    ... )
+    >>> np.allclose(Xw, Xw_ref, atol=1e-8, rtol=1e-5)  
+    True
+    >>> np.allclose(Z, Z_ref, atol=1e-8, rtol=1e-5)  
+    True
 
     """
     n_channels, n_samples = Y.shape
@@ -552,26 +747,48 @@ def est_spike_times(
     (ii) a peak detection method identifies spike candidates that
     are (iii) sorted with kmeans++ to estimate true and false spikes.
 
-    Args
-    ----
-        source : np.ndarray (n_samples, )
-            Spike-like input signal (predicted sources)
-        fsamp : float 
-            Sampling rate in Hz
-        cluster : {"kmeans", "gmm"}, default "kmeans"
-            Clustering method used to identify the spike indices. Can be either
-            "kmeans" or "gmm" (fitting a Gaussian mixture model).
-        a : float , default 2
-            Exponent of assymetric power law used for contrast enhancement
-        min_delay : float , default 0.01 
-            Mimium distance between two spikes (used for peak detection)   
+    Parameters
+    ----------
+    source : np.ndarray 
+        Spike-like source signal with shape ``(n_samples, )``
+    fsamp : float 
+        Sampling rate in Hz
+    cluster : {"kmeans"}, default "kmeans"
+        Clustering method used to identify the spike indices. Currently,
+        only kmeans++ is implemented
+    a : float , default 2
+        Exponent of assymetric power law used for contrast enhancement
+    min_delay : float , default 0.01 
+        Mimium distance between two spikes (used for peak detection)   
 
     Returns
     -------
-        est_spikes : np.ndarray 
-            Estimated spike indices
-        sil : float 
-            Silhouette-like score (0 = poor, 1 = strong separation)
+    est_spikes : np.ndarray 
+        Array of the Estimated spike indices
+    sil : float 
+        Silhouette-like score (0 = poor, 1 = strong separation)
+
+    Examples
+    --------
+
+    Generate a spiky signals as the superposition of random noise
+    and spikes. Then estimate the spike times and calculate a 
+    silhouette-like score to quantify the separation of the detected 
+    peaks from the noise
+
+    >>> import numpy as np
+    >>> from muniverse.algorithms.core import est_spike_times
+    >>> fsamp = 2000
+    >>> rng = np.random.default_rng(42)
+    >>> noise = rng.standard_normal(int(fsamp * 5))  
+    >>> spikes = np.arange(int(fsamp * 1), int(fsamp * 4), 400)
+    >>> noise[spikes] += 10
+    >>> est_spikes, sil = est_spike_times(noise, fsamp)
+    >>> np.all(spikes == est_spikes)
+    np.True_
+    >>> sil
+    np.float64(0.9825454841122653)           
+
     """
 
     # Assymetric power law that can be useful for contrast enhancement
@@ -619,17 +836,35 @@ def gram_schmidt(
     """
     Stabilized Gram-Schmidt orthogonalization.
 
-    Args
-    ----
-        w : np.ndarray (n, )
-            Vector to be orthogonalized 
-        B : np.ndarray (n, k)
-            Matrix of basis vectors in columns 
+    Parameters
+    ---------
+    w : np.ndarray 
+        Vector to be orthogonalized with shape ``(n_features, )``
+    B : np.ndarray 
+        Matrix of basis vectors with shape ``(n_features, n_columns)``.
+        Columns containing zero vectors are ignored
 
     Returns
     -------
-        u : np.ndarray (n, )
-            Orthogonalized vector
+    u : np.ndarray 
+        Orthogonalized vector with shape ``(n_features, )``
+
+    Examples
+    --------
+
+    Orthogonalize vector ``v`` given the basis vecors stored 
+    in matrix ``B``
+
+    >>> import numpy as np
+    >>> from muniverse.algorithms.core import gram_schmidt
+    >>> B = np.array([
+    ...     [1, 0, 0],
+    ...     [0, 1, 0],
+    ...     [0, 0, 0]    
+    ... ])
+    >>> v = np.array([2, 3, 4])
+    >>> gram_schmidt(v, B)
+    array([0., 0., 4.])
 
     """
     #w = np.asarray(w, dtype=float)
@@ -655,24 +890,25 @@ def spike_triggered_average(
 ) -> np.ndarray:
     """
     Estimate the impulse response of a finite impulse response filters 
-    given the time samples of the events.
+    given the time samples of the events
 
-    Args
-    ----
-        sig : np.ndarray (n_channels, n_samples)
-            Input signal 
-        spikes : np.ndarray (n_spikes, )
-            Array of spike indices
-        win : float , default 0.02
-            Window size (in both directions) in seconds used for 
-            impulse response extraction     
-        fsamp : float , default 2048
-            Sampling frequency in Hz
+    Parameters
+    ----------
+    sig : np.ndarray 
+        Input signal with shape ``(n_features, n_samples)``
+    spikes : np.ndarray 
+        Array of spike indices with shape ``(n_spikes, )``
+    win : float , default 0.02
+        Window size (in both directions) in seconds used for 
+        impulse response extraction     
+    fsamp : float , default 2048
+        Sampling frequency in Hz
 
     Returns
     -------
-        waveform : np.ndarray 
-            Estimated impulse response of a given source
+    waveform : np.ndarray 
+        Estimated impulse response of a given source 
+        with shape ``(n_features, n_window)``
 
     """
 
@@ -700,33 +936,34 @@ def peel_off(
     Peel off the signal contribution of a source with finite impulse
     response filter given the time stamps of the impulses (spikes) 
     using spike triggered averaging. The reconstruction of the 
-    component signal is achieved in the frequency domain (fft/ifft). 
+    component signal is either achieved in the frequency domain (fft/ifft)
+    or through sparse template subtraction.
 
-    Args
-    ----
-        sig : np.ndarray (n_channels, n_samples)
-            signal 
-        spikes : np.ndarray (n_spikes, ) 
-            Array of spike indices
-        win : float , default 0.02
-            Window size in seconds for MUAP template     
-        fsamp : float , default 2048
-            Sampling frequency in Hz
-        method : {"sparse", "fft_conv"}  
-            Method used for peel-of. If "sparse" (default), 
-            the function loops over all spikes and inserts a 
-            the waveform reconstructed from spike-triggered averaging. 
-            If "fft_conv" the signal is reconstructed by convolving
-            (fft-based) the waveform with the spike train.  
+    Parameters
+    ----------
+    sig : np.ndarray 
+        Input signal with shape ``(n_features, n_samples)``
+    spikes : np.ndarray 
+        Array of spike indices with shape ``(n_spikes, ) ``
+    win : float , default 0.02
+        Window size in seconds for MUAP template     
+    fsamp : float , default 2048
+        Sampling frequency in Hz
+    method : {"sparse", "fft_conv"}  
+        Method used for peel-of. If "sparse" (default), 
+        the function loops over all spikes and inserts a 
+        the waveform reconstructed from spike-triggered averaging. 
+        If "fft_conv" the signal is reconstructed by convolving
+        (fft-based) the waveform with the spike train.  
 
     Returns
     -------
-        residual_sig : np.ndarray (n_channels, n_samples)
-            Residual signal after removing component
-        comp_sig : np.ndarray (n_channels, n_samples)
-            Estimated contribution of the given source
-        waveform : np.ndarray (n_channels, n_samples)
-            Impulse response of the given component    
+    residual_sig : np.ndarray 
+        Residual signal after removing component with shape ``(n_features, n_samples)``
+    comp_sig : np.ndarray 
+        Estimated contribution of the given source with shape ``(n_features, n_samples)``
+    waveform : np.ndarray 
+        Impulse response of the given component with shape ``(n_channels, n_waveform)``    
     """
 
     waveform = spike_triggered_average(sig, spikes, win, fsamp)
@@ -787,17 +1024,17 @@ def spike_dict_to_long_df(
     - "unit_id": Unique unit ID (integer)
     - "event_type": Event classifier (here: "motor-unit-spike")
 
-    Args
-    ----
-        spike_dict : dict 
-            Dictonary of spike times {unit_id (int): list(int)}
-        fsamp : float, default 2048
-            Sampling frequency in Hz
+    Parameters
+    ----------
+    spike_dict : dict 
+        Dictonary of spike times {unit_id (int): list(int)}
+    fsamp : float, default 2048
+        Sampling frequency in Hz
 
     Returns
     -------
-        df : pd.DataFrame 
-            Table of motor unit spikes
+    df : pd.DataFrame 
+        Table of motor unit spikes
     """
 
     columns = ["onset", "duration", "sample", "unit_id", "event_type"]
@@ -843,41 +1080,65 @@ def get_duplicates_mask(
     Idendify duplicates spike trains and only keep for each 
     unique unit label the source with the best quality score
 
-    Args
-    ----
-        spikes : pd.DataFrame
-            Long-table dictonary of spikes
+    Parameters
+    ----------
+    spikes : pd.DataFrame
+        Long-table dictonary of spikes
 
-        scores : np.ndarray 
-            Array of quality metrics
+    scores : np.ndarray 
+        Array of quality metrics
 
-        fsamp : float 
-            Sampling rate in Hz
+    fsamp : float 
+        Sampling rate in Hz
 
-        mode : {"max", "min", "first"} , default "max"         
-            Whether to keep the source with the maximal score ("max"),
-            the minimal score ("min"), or the first copy ("first").
+    mode : {"max", "min", "first"} , default "max"         
+        Whether to keep the source with the maximal score ("max"),
+        the minimal score ("min"), or the first copy ("first").
 
-        duplicate_theshold : float , default 0.3
-            Minimum fraction of common spikes to classify 
-            two units identical       
+    duplicate_theshold : float , default 0.3
+        Minimum fraction of common spikes to classify 
+        two units identical       
 
-        max_shift : float , default 0.01
-            Maximal delay between two spike trains in seconds
+    max_shift : float , default 0.01
+        Maximal delay between two spike trains in seconds
 
-        tol : float , default 0.001
-            All spikes with a delay lower than the given tolerance 
-            (in seconds) are classified identical
+    tol : float , default 0.001
+        All spikes with a delay lower than the given tolerance 
+        (in seconds) are classified identical
 
     Returns
     -------
-        keep_mask : np.ndarray of bool (n_units,)
-            Boolean mask of selected sources
-            (True: keep source, False: reject source)
+    keep_mask : np.ndarray of bool 
+        Boolean mask with shape ``(n_units, )``;
+        True: keep source, False: reject source
 
-        new_labels : np.ndarray of int (n_units,)
-            New label for each source   
+    new_labels : np.ndarray of int (n_units,)
+        New label for each source   
 
+    Examples
+    --------
+
+    Consider two spike trains with two 
+    common spikes and one unique spikes 
+    per unit. The second unit has a higher
+    quality score
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from muniverse.algorithms.core import get_duplicates_mask
+    >>> spikes = pd.DataFrame({
+    ...     "onset": [0, 1, 1, 2, 2, 3], 
+    ...     "duration": [0] * 5, 
+    ...     "unit_id": [0, 0, 1, 0, 1, 1]
+    ... })
+    >>> scores = np.array([0.91, 0.93])
+    >>> mask, new_labels = get_duplicates_mask(
+    ...     spikes, scores, 10
+    ... )
+    >>> mask
+    array([False,  True])
+    >>> new_labels
+    array([0, 0])
 
     """
 
@@ -922,25 +1183,59 @@ def get_bad_source_mask(
     Generate a boolean mask that filters out bad sources 
     based on a quality score and minimum number of spikes. 
 
-    Args
-    ----
-        spikes : pd.DataFrame
-            Spike data frame
-        score : np.ndarray
-            Vector of scores
-        threshold : float
-            Threshold used classify bad and good sources
-        mode : {"below", "above"} , default "below"         
-            Weather values below or above the threshold are
-            considered bad
-        min_number_of_spikes : int
-            Minimum number of spikes required for a good source
+    Parameters
+    ----------
+    spikes : pd.DataFrame
+        Spike data frame
+    score : np.ndarray
+        Vector of scores
+    threshold : float
+        Threshold used classify bad and good sources
+    mode : {"below", "above"} , default "below"         
+        Weather values below or above the threshold are
+        considered bad
+    min_num_spikes : int
+        Minimum number of spikes required for a good source
 
     Returns
     -------
-        keep_mask : np.ndarray (n_units,)
-            Boolean mask of bad sources 
-            (True: keep source, False: reject source) 
+    keep_mask : np.ndarray 
+        Boolean mask with shape ``(n_units ,)``;
+        True: keep source; False: reject source 
+
+    Examples
+    --------
+
+    Make 10 spikes correspodning to two units with quality 
+    score of 0.89 and 0.93. We want to reject all units
+    with a score below 0.9 and less than 3 spikes    
+
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from muniverse.algorithms.core import get_bad_source_mask
+    >>> rng = np.random.default_rng(42)
+    >>> spikes = {
+    ...     "onset": np.arange(10),
+    ...     "duration": np.zeros(10),
+    ...     "unit_id": rng.integers(0, 2, 10)
+    ... }   
+    >>> spikes = pd.DataFrame(spikes)
+    >>> spikes["unit_id"].to_numpy()
+    array([0, 1, 1, 0, 0, 1, 0, 1, 0, 0])
+    >>> scores = np.array([0.89, 0.93])
+    >>> get_bad_source_mask(
+    ... spikes, scores, threshold=0.9, mode="below", min_num_spikes=3
+    ... )
+    array([False,  True])
+
+    Now we want to reject units with less than 5 spikes and a score 
+    below 0.87
+
+    >>> get_bad_source_mask(
+    ... spikes, scores, threshold=0.87, mode="below", min_num_spikes=5
+    ... )
+    array([True, False])
+
     """
 
     units = sorted(spikes["unit_id"].unique())
@@ -969,21 +1264,22 @@ def filter_spikes(
     keep_mask: np.ndarray
 ) -> tuple[pd.DataFrame, dict]:
     """
-    Filter BIDS spike events using a boolean mask.
+    Filter units in an events table using a boolean mask.
 
     Parameters
     ----------
     spikes : pd.DataFrame
-        BIDS events table. Must contain a column with unit_id labels.
+        BIDS events table. Must contain a column ``unit_id`` 
     keep_mask : np.ndarray (bool)
-        Boolean mask of shape (n_units,) indicating kept sources.
+        Boolean mask of shape ``(n_units, )`` indicating sources
+        that should be kept (True) or rejected (False)
 
     Returns
     -------
     spikes : pd.DataFrame
-        Filtered spikes with masked units removed and remapped labels 
+        Filtered spikes with new ``unit_id`` labels 
     label_mapping : dict
-        Mapping of from old to new unit_id labels
+        Mapping of from old to new ``unit_id`` labels
     """
 
     spikes = spikes.copy()
@@ -1007,12 +1303,12 @@ def map_spikes(
     t_start: float
 ) -> tuple[pd.DataFrame, dict]:
     """
-    Filter BIDS spike events using a boolean mask.
+    Apply a temporal shift to all events in a BIDS-events table
 
     Parameters
     ----------
     spikes : pd.DataFrame
-        BIDS events table. Must contain a column with unit_id labels
+        BIDS events table. Must contain the columns ``onset`` and ``sample``
     fsamp : float
         Sampling rate in Hz
     t_start : float
@@ -1021,7 +1317,7 @@ def map_spikes(
     Returns
     -------
     spikes : pd.DataFrame
-        Temporally mapped spikes
+        Temporally mapped events
     """
 
     spikes = spikes.copy()

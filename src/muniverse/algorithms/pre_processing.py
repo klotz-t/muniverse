@@ -1,3 +1,9 @@
+"""
+High-level API to pre-process multi-channel
+EMG data
+
+"""
+
 import warnings
 import numpy as np
 import pandas as pd
@@ -16,7 +22,15 @@ from .core import (
 
 class PreProcessEMG:
     """
-    Class to preprocess HD-EMG data.
+    Class to preprocess HD-EMG data. Availible steps include 
+    (for details see below)
+
+    - Bandpass, highpass, lowpass and notch filtering
+    - Automatically detect bad channels
+    - Segment data and mask bad channels
+    - Downsample data
+    - Peel off contributions from already decomposed MUs
+    - Compute basic signal metrics 
 
     Parameters
     ----------
@@ -24,127 +38,18 @@ class PreProcessEMG:
         List of preprocessing steps. Each step is a dictionary describing
         the processing operation.
 
-    Processing Steps
-    ----------------    
-    **Bandpass filter**: Bandpass filter time series data using a digital
-    infinite impulse response filter ("butter") or finite impulse response
-    filter ("firwin2")::
+    Examples
+    --------
+    Pre process multi-channel high density EMG data of 
+    shape ``(n_channels, n_samples)``
 
-        {
-            "step": "bandpass",
-            "high_pass": float,
-            "low_pass": float,
-            "method": "butter" | "firwin2",
-            "order": int,      # required if method == "butter"
-            "numtabs": int,    # required if method == "firwin2"
-        }
+    1.) Apply a second order butterworth-type bandpass filter
 
-    **Highpass filter**: Highpass filter time series data using a digital
-    infinite impulse response filter ("butter") or finite impulse response
-    filter ("firwin2")::
+    2.) Reject the power line interference (50 Hz) and two 
+        harmonics using a fisrt order butterworth filter
 
-        {
-            "step": "highpass",
-            "high_pass": float,
-            "method": "butter" | "firwin2",
-            "order": int, # required if method == "butter"
-            "numtabs": int, # required if method == "firwin2"
-        }
-
-    **Lowpass filter**: Lowpass filter time series data using a digital
-    infinite impulse response filter ("butter") or finite impulse response
-    filter ("firwin2")::
-
-        {
-            "step": "lowpass",
-            "low_pass": float,
-            "method": "butter" | "firwin2",
-            "order": int, # required if method == "butter"
-            "numtabs": int, # required if method == "firwin2"
-        }
-
-    **Notch filter**:: Apply a digital notch (stop band) filter using either a
-    infinite impulse response filter ("butter"), a finite impulse response 
-    filter ("iirnotch") or performing filtering in the frequency domain 
-    ("fft_nulling" and "fft_interpolation"). For "fft_nulling" the spectrum in
-    the specified frequency band is set to zero, for "fft_interpolation" the 
-    spectral amplitude is interpolated through by the neighbourhood. Time series
-    data is recovered through an inverse fft::
-
-        {
-            "step": "notch",
-            "freqs": list[float],
-            "method": "butter" | "iirnotch" | "fft_nulling" | "fft_interpolation",
-            "order": int,   # if "butter"
-            "dfreq": float  # if "iirnotch", "fft_nulling" or "fft_interpolation"
-        }
-
-    **Bad Channel Detection**: Automatically detect bad channels based on some 
-    metric ("std" or "rms") computed in a given time window (given in seconds). 
-    If method is "zscore" the score distribution is normalized (zero mean, 
-    unit standard deviation). All scores are compared to a "threshold_value". 
-    If mode is "above" all values above the threshold are rejected, if mode is "below" 
-    all values below the theshold are rejected. For mode="two-sided" the absolute value 
-    of the score is computed and all values above the threshold are rejected 
-    (only availible if "method" == "zscore")::  
-
-        {
-            "step": "bad_channel_detection",
-            "metric": Literal["std", "rms", "medfreq", "medpower"],
-            "window": (t0, t1) | None, # Given in seconds, if None consider the full data
-            "method": "zscore" | "threshold",
-            "max_iter": int, # Needed if method is zscore
-            "threshold_value": float,
-            "mode": "below" | "above" | "two-sided",
-            "bandwidth": (f0, f1) | None, # Bandwidth considered for freqeuncy-based metrics
-            "description": str
-        } 
-
-    **Mask Channels**: Mask all channels given in "channel_list" to be excluded in the following. 
-    Can be either used to reject known bad channels or limit the analysis to a subset of your data::  
-
-        {
-            "step": "mask_channels",
-            "channel_list": list[int],
-            "description": str
-        }
-
-    **Downsample**: Reduces the sampling frequency by the specified value::  
-
-        {
-            "step": "downsample",
-            "factor": int 
-        }
-
-    **Time window**: Truncate your signal to only consider a selected time window.
-    If t_end = -1 the time window ends with the last sample::  
-
-        {
-            "step": "time_window",
-            "t_start": float,
-            "t_end": float 
-        }    
-
-    **Get metric**: Calculate for each channel the specified metric in the given 
-    time window. 
-
-        {
-            "step": "get_metric",
-            "metric": Literal["std", "rms", "medfreq", "medpower"],
-            "window": (t0, t1) | None, # Given in seconds, if None consider the full data
-        } 
-
-    **Peel off**: Peel of contributions of known MU activity.
-
-        {
-            "step": "peel_off",
-            "window_size": float, # Half-length of the peel off window in seconds
-        }    
-
-    Examples:
-    ---------
-    Pre process HD-EMG data using a bandpass and a notch filter.
-    >>> model = pre_processing(steps = [
+    >>> from muniverse.algorithms.pre_processing import PreProcessEMG
+    >>> model = PreProcessEMG(steps = [
     ...     {
     ...         "step": "bandpass",
     ...         "high_pass": 20,
@@ -156,30 +61,19 @@ class PreProcessEMG:
     ...         "step": "notch",
     ...         "freqs": [50, 100, 150],
     ...         "method": "butter",
-    ...         "order": 2
+    ...         "order": 1
     ...     },
     ... ])
-    >>> preprocessed_data, metadata = model.pre_process(data=emg_data, fsamp=2048)                     
+    >>> preprocessed_data, metadata = model.pre_process(
+    ...     data=emg_data, fsamp=2048
+    ... )     
 
+                        
     """
 
     def __init__(
             self, 
-            steps: list[dict] = [
-                {  
-                    "step": "bandpass",
-                    "high_pass": 20,
-                    "low_pass": 500,
-                    "method": "butter",
-                    "order": 2,
-                },
-                {
-                    "step": "notch",
-                    "freqs": [50, 100, 150],
-                    "method": "butter",
-                    "order": 2
-                }    
-            ]          
+            steps: list[dict] = []          
     ):
 
         #self.pre_process_steps = pre_process_steps
@@ -189,6 +83,51 @@ class PreProcessEMG:
         ]
 
     class Bandpass(BaseModel):
+        """
+        Bandpass filter timeseries data using a digital infinite 
+        impulse  response filter (``butter``) or finite impulse 
+        response filter (``firwin2``). To obtain a zero-phase response,
+        the filter is applied in forward and backward direction.
+    
+        Parameters
+        ----------
+    
+        data : np.ndarray
+            Input data of shape ``(n_channels x n_samples)``
+        fsamp : float 
+            Sampling frequency in Hz
+        high_pass : float, default 20 
+            Cut-off frequency for the high-pass filter in Hz    
+        low_pass : float, default 500 
+            Cut-off frequency for the low-pass filter in Hz
+        method :  {"butter", "firwin2"}, default "butter"
+            Filter type
+        order : int | None, default 2 
+            Order of the filter (required if ``method==butter``) 
+        numtabs : int | None, default 101 
+            Number of filter tabs (required if ``method==firwin2``)
+
+        Examples
+        --------
+
+        Preprocess multi-channel EMG data using a fisrt order butterwoth 
+        bandpass filter
+
+        >>> from muniverse.algorithms.pre_processing import PreProcessEMG
+        >>> step = {
+        ...     "step": "bandpass",
+        ...     "high_pass": 20,
+        ...     "low_pass": 500,
+        ...     "method": "butter",
+        ...     "order": 1
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
+        >>> preprocessed_data, metadata = model.pre_process(
+        ...     data=emg_data, fsamp=2048
+        ... )
+
+        """    
         step: Literal["bandpass"]
         high_pass: float = 20
         low_pass: float = 500
@@ -197,6 +136,47 @@ class PreProcessEMG:
         numtabs: int = 101
 
     class Highpass(BaseModel):
+        """
+        High-pass filter timeseries data using a digital infinite 
+        impulse  response filter ("butter") or finite impulse 
+        response filter ("firwin2").
+    
+        Parameters
+        ----------
+        data : np.ndarray
+            Input data of shape ``(n_channels, n_samples)``
+        fsamp : float 
+            Sampling frequency in Hz
+        high_pass : float, default 20 
+            Cut-off frequency for the high-pass filter in Hz    
+        method :  {"butter", "firwin2"}, default "butter"
+            Filter type
+        order : int | None, default 2 
+            Order of the filter (required if ``method==butter``) 
+        numtabs : int | None, default 101 
+            Number of filter tabs (required if ``method==firwin2``)
+        
+
+        Examples
+        --------
+
+        Apply a 10 Hz highpass filter using a finite impulse response
+        ``firwin2``filter
+
+        >>> from muniverse.algorithms.pre_processing import PreProcessEMG
+        >>> step = {
+        ...     "step": "highpass",
+        ...     "high_pass": 10,
+        ...     "method": "firwin2",
+        ...     "numtabs": 101
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
+        >>> preprocessed_data, metadata = model.pre_process(
+        ...     data=emg_data, fsamp=2048
+        ... )
+
+        """  
         step: Literal["highpass"]
         high_pass: float = 20
         method: Literal["butter", "firwin2"] = "butter"
@@ -204,6 +184,47 @@ class PreProcessEMG:
         numtabs: int = 101 
 
     class Lowpass(BaseModel):
+        """
+        Low-pass filter timeseries data using a digital infinite 
+        impulse  response filter (``butter``) or finite impulse 
+        response filter (``firwin2``).
+    
+        Parameters
+        ----------
+        data : np.ndarray
+            Input data of shape ``(n_channels, n_samples)``
+        fsamp : float 
+            Sampling frequency in Hz  
+        low_pass : float, default 500 
+            Cut-off frequency for the low-pass filter in Hz
+        method :  {"butter", "firwin2"}, default "butter"
+            Filter type
+        order : int | None, default 2 
+            Order of the filter (required if ``method==butter``) 
+        numtabs : int | None, default 101 
+            Number of filter tabs (required if ``method==firwin2``)
+                
+        
+        Examples
+        --------
+
+        Apply a low pass filter at 450 Hz using a 4-th order 
+        ``butterworth``filter
+
+        >>> from muniverse.algorithms.pre_processing import PreProcessEMG
+        >>> step = {
+        ...     "step": "lowpass",
+        ...     "low_pass": 450,
+        ...     "method": "butter",
+        ...     "order": 4
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
+        >>> preprocessed_data, metadata = model.pre_process(
+        ...     data=emg_data, fsamp=2048
+        ... )
+
+        """ 
         step: Literal["lowpass"]
         low_pass: float = 500
         method: Literal["butter", "firwin2"] = "butter"
@@ -211,6 +232,52 @@ class PreProcessEMG:
         numtabs: int = 101       
 
     class Notch(BaseModel):
+        """
+        Notch filter (stop band) time series data using either a infinite impulse 
+        response filter ("butter"), a finite impulse response filter ("iirnotch") or 
+        performing filtering in the frequency domain ("fft_nulling" and "fft_interpolation"). 
+        For "fft_nulling" the spectrum in the specified frequency band is set to zero, 
+        for "fft_interpolation" the spectral amplitude is interpolated through by the 
+        neighbourhood. Time series data is then recovered through an inverse fft.
+    
+        Parameters
+        ----------
+    
+        data : np.ndarray
+            Input data of shape ``(n_channels, n_samples)``
+        fsamp : float 
+            Sampling frequency in Hz
+        freqs : list of float, default [50, 100, 150] 
+            List of frequencies to be notch filtered
+        method : {"butter", "iirnotch", "fft_nulling", "fft_interpolation"}, default "butter"
+            Filter type 
+        order : int or None, default 2
+            Order of the filter (if method is ``butter``)
+        dfreq : float or None, default 1 
+            Width of the notch filter (in both directions) in Hz 
+            (if method is iirnotch, fft_nulling, fft_interpolation).
+                
+        
+        Examples
+        --------
+
+        Apply a notch filter at the 50 Hz power line frequency and the 
+        100 and 150 Hz harmonics using ``fft_nulling``
+
+        >>> from muniverse.algorithms.pre_processing import PreProcessEMG
+        >>> step = {
+        ...     "step": "notch",
+        ...     "freqs": [50, 100, 150],
+        ...     "method": "fft_nulling",
+        ...     "dfreq": 1 
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
+        >>> preprocessed_data, metadata = model.pre_process(
+        ...     data=emg_data, fsamp=2048
+        ... )
+
+        """ 
         step: Literal["notch"]
         freqs: List[float] = [50, 100, 150]
         method: Literal[
@@ -220,6 +287,69 @@ class PreProcessEMG:
         dfreq: float = 1
    
     class BadChannelDetection(BaseModel):
+        """
+        Automatically detect bad channels based on some per channel
+        metric computed in a given time window (given in seconds). 
+        If method is ``zscore`` the score distribution is normalized (zero mean, 
+        unit variance). All scores are compared to a "threshold_value". If mode 
+        is "above", all values above the threshold are rejected, if mode is "below", 
+        all values below the theshold are rejected. For mode=="two-sided", the 
+        absolute value of the score is computed and all values above the threshold 
+        are rejected (only availible if the selected method is ``zscore``)  
+
+        metric : {"std", "rms", "medfreq", "medpower"}
+            Metric used to detect outlier channels. Availible options
+            are standard deviation "std" the root mean square ("rms"),
+            the median frequency content ("medfreq") or the median power
+            of the signal ("medpower")
+        window : {tuple, None} , default None
+            Time window (in seconds) in which the specified metric is 
+            calculated. If ``None``the full length of the signal is considered 
+        method : {"zscore", "threshold"} , default "zscore"
+            Method used for outlier detection. If ``zscore``, all values 
+            are zscore normalized and outlier thresholds are specified by assuming
+            a standard normal distribution. When using ``threshold``, a fixed 
+            theshold for outlier detection is used. 
+        threshold_value : float , default 3 
+            Values above/below this threshold are considered bad channels
+        mode : {"above", "below", "two-sided"} , default "two-sided"
+            Specify weather to serach for outliers above the threshold ("above") 
+            or below the thershold ("below"). If the slected method is ``zscore``
+            you can also select "two-sided" to serach for outliers on
+            both ends of the distribution.
+        max_iter : int , default 3
+            Needed if the slected method is ``zscore``. Specifies the number
+            of iterations that are used for outlier detection  
+        bandwidth : {tuple, None} , default None
+            For the spectral metrics "medfreq" and "medpow" you can specify a 
+            tuple indicating a bandwidth of interest     
+        description : str
+            Short free-text description why the channel was rejected
+            and that appears in the processing metadata     
+             
+                        
+        Examples
+        --------
+
+        Automatically reject flat channels based on the zscore normalized 
+        signal amplitude 
+
+        >>> from muniverse.algorithms.pre_processing import PreProcessEMG
+        >>> step = {
+        ...     "step": "bad_channel_detection",
+        ...     "metric": "rms",
+        ...     "method": "zscore"
+        ...     "threshold_value": 3,
+        ...     "mode": "below",
+        ...     "description": "Flat channel detected"
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
+        >>> preprocessed_data, metadata = model.pre_process(
+        ...     data=emg_data, fsamp=2048
+        ... )
+
+        """ 
         step: Literal["bad_channel_detection"]
         metric: Literal["std", "rms", "medfreq", "medpower", "cumpower"]
         method: Literal["zscore", "threshold"] = "zscore"
@@ -231,20 +361,170 @@ class PreProcessEMG:
         description: str = "Automatical bad channel detection"   
 
     class MaskChannels(BaseModel):
+        """
+        Mask all channels given in ``channel_list`` to be excluded in the following. 
+        Can be either used to reject known bad channels or limit the analysis to a 
+        subset of your data (e.g., only one EMG array)
+
+        channel_list : list of int , default []
+            List of ignored channels
+        description : str   
+            Short free-text description why the channel was rejected
+            and that appears in the processing metadata  
+            
+        Examples
+        --------
+
+        Remove channels 60 and 61 that have been manually classified 
+        to be bad channels
+
+        >>> from muniverse.algorithms.pre_processing import PreProcessEMG
+        >>> step = {
+        ...     "step": "mask_channels",
+        ...     "channel_list": [60, 61],
+        ...     "description": "Manually detected bad channels"
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
+        >>> preprocessed_data, metadata = model.pre_process(
+        ...     data=emg_data, fsamp=2048
+        ... )
+
+        """ 
         step: Literal["mask_channels"]
         channel_list: list[int] = []  
-        description: str = "Manually masked channel"  
+        description: str = "Manually masked channel" 
+
+    class MaskSamples(BaseModel):
+        """
+        Mask all samples given in ``sample_list`` to be excluded in the following. 
+        Can be either used to reject known artifacts or limit the analysis to a 
+        subset of your data (e.g., only time samples corresponding to a task)
+
+        sample_list : list of int , default []
+            List of ignored channels
+            
+        Examples
+        --------
+
+        Remove the first second of the signal due to a 
+        motion artifact in the EMG data
+
+        >>> from muniverse.algorithms.pre_processing import PreProcessEMG
+        >>> fsamp = 2048
+        >>> step = {
+        ...     "step": "mask_samples",
+        ...     "sample_list": np.arange(fsamp).tolist()
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
+        >>> preprocessed_data, metadata = model.pre_process(
+        ...     data=emg_data, fsamp=fsamp
+        ... )
+
+        """ 
+        step: Literal["mask_samples"]
+        sample_list: list[int] = []  
 
     class Downsample(BaseModel):
+        """
+        Reduces the sampling frequency by the specified value 
+
+        Parameters
+        ----------
+        
+        factor : int 
+            The factor by which the signal is downsamples
+                
+        Examples
+        --------
+
+        Downsample a signal sampled at 10240 Hz to 2048 Hz
+
+        >>> from muniverse.algorithms.pre_processing import PreProcessEMG
+        >>> step = {
+        ...     "step": "downsample",
+        ...     "factor": 5 
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
+        >>> preprocessed_data, metadata = model.pre_process(
+        ...     data=emg_data, fsamp=2048
+        ... )
+
+        """ 
         step: Literal["downsample"]
         factor: int
 
     class TimeWindow(BaseModel):
+        """
+        Restric your analysis to a selected time window.
+            
+        t_start : float
+            Starting point of the region of interest
+        t_end : float
+            End point of the region of interest. If ``t_end = -1``,
+            the time window ends with the last sample
+                    
+        Examples
+        --------
+
+        Select a time window from 5 to 25 seconds for your signal 
+        analysis
+
+        >>> from muniverse.algorithms.pre_processing import PreProcessEMG
+        >>> step = {
+        ...     "step": "time_window",
+        ...     "t_start": 5.0,
+        ...     "t_end": 25.0 
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
+        >>> preprocessed_data, metadata = model.pre_process(
+        ...     data=emg_data, fsamp=2048
+        ... )
+
+        """ 
         step: Literal["time_window"]
         t_start: float = 0
         t_end: float = -1
 
     class GetMetric(BaseModel):
+        """
+        Calculate for each channel the specified metric 
+        and which will be reported in the processing metadata:
+
+        Parameters
+        ----------
+        
+        metric : {"std", "rms", "medfreq", "medpower"}
+            Metric to be computed. Can be the standard deviation ("std"),
+            the root mean square ("rms"), the median frequency ("medfreq")
+            or the median power ("medpower") of the chanels 
+        window : {tuple, None}
+            Time window (in seconds) used to compute the specified metric.
+            If ``None``, the full data is considered.
+            
+        
+        Examples
+        --------
+
+        Calculate the median frequency of each channel in the time window
+        from 7.5 to 22.5 seconds
+
+        >>> from muniverse.algorithms.pre_processing import PreProcessEMG
+        >>> step = {
+        ...     "step": "get_metric",
+        ...     "metric":"medfreq",
+        ...     "window": (7.5, 22.5)
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
+        >>> preprocessed_data, metadata = model.pre_process(
+        ...     data=emg_data, fsamp=2048
+        ... )
+
+        """ 
         step: Literal["get_metric"]
         metric: Literal["std", "rms", "medfreq", "medpower", "cumpower"]
         window: tuple[float, float] | None = None
@@ -252,8 +532,79 @@ class PreProcessEMG:
         description: str = ""
 
     class PeelOff(BaseModel):
+        """
+        Peel of contributions of known MU activity to obtain
+        a residual multi-channel EMG signal for further processing
+    
+        Parameters
+        ----------
+        window_size : float
+            Half-length of the peel off window in seconds
+    
+        
+        Examples
+        --------
+
+        Peel of the contribution of all motor units that are already
+        decomposed with spike times stored in ``known_spikes" and using
+        a peel off window of 0.025 seconds
+
+        >>> from muniverse.algorithms.pre_processing import PreProcessEMG
+        >>> step = {
+        ...     "step": "peel_off",
+        ...     "window_size": 0.025 
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
+        >>> preprocessed_data, metadata = model.pre_process(
+        ...     data=emg_data, fsamp=2048, spikes=known_spikes
+        ... )
+
+        """ 
         step: Literal["peel_off"]
-        window_size: float = 0.02          
+        window_size: float = 0.02    
+
+    class ArtifactRejection(BaseModel):
+        """
+        Reject time samples that are associated with
+        artifacts
+
+        Parameters
+        ----------
+        artifact_times : list of float , default []
+            Time points at which an artifact was detected
+        before : float 
+            Time intervall before the artifact to be rejected
+        after : float 
+            Time intervall after the artifact to be rejected
+
+        Examples
+        --------
+
+        Reject a motion artifact detected at 10.2 seconds and 
+        reject 0.05 seconds of signal before and after the 
+        artifact event
+
+        >>> from muniverse.algorithms.pre_processing import PreProcessEMG
+        >>> step = {
+        ...     "step": "artifact_rejection",
+        ...     "artifact_time": [10.2],
+        ...     "before": 0.05,
+        ...     "after": 0.05
+        ... }
+        >>> model = PreProcessEMG()
+        >>> model.add_step(step)
+        >>> preprocessed_data, metadata = model.pre_process(
+        ...     data=emg_data, fsamp=2048
+        ... )
+
+        
+        """
+
+        step: Literal["artifact_rejection"]
+        artifact_times : list[float] = []
+        before: float = 0.01
+        after: float = 0.01
 
     PreprocessStep = Annotated[
         Union[Bandpass, 
@@ -262,10 +613,12 @@ class PreProcessEMG:
             Notch, 
             BadChannelDetection, 
             MaskChannels, 
+            MaskSamples,
             Downsample,
             TimeWindow,
             GetMetric,
-            PeelOff
+            PeelOff,
+            ArtifactRejection
         ],
         Field(discriminator="step")
     ]  
@@ -273,7 +626,16 @@ class PreProcessEMG:
     _adapter = TypeAdapter(PreprocessStep)
 
     def add_step(self, step):
-        """ Add an additional post processing step"""
+        """ 
+        Add an additional pre processing step
+        
+        Parameters
+        ----------
+        
+        step : dict
+            Dictonary with the parameters of the added processing step
+        
+        """
         
         self.steps.append(
             self._adapter.validate_python(step)
@@ -413,27 +775,27 @@ class PreProcessEMG:
         Pre process multi-channel time EMG data using the 
         specified list of steps.
 
-        Args
-        ----
-            data : np.ndarray (n_channels x n_samples)
-                Raw time series data 
-            fsamp : float 
-                Sampling rate in Hz
-            spikes : pd.DataFrame
-                Prior knowledge motor unit spike times    
+        Parameters
+        ----------
+        data : np.ndarray 
+            Raw time series data of shape ``(n_channels, n_samples)``
+        fsamp : float 
+            Sampling rate in Hz
+        spikes : pd.DataFrame
+            Prior knowledge motor unit spike times    
 
         Returns
         -------
-            data : np.ndarray (n_channels x n_samples)
-                Pre-prcessed time series data 
-            metadata : dict
-                Dictonary of process metadata 
-                - fsamp (float): Sampling rate in Hz
-                - ch_mask (np.ndarray): Boolean channel selection mask
-                - sample_mask (np.ndarray): Boolean sample selection mask
-                - ch_status (pd.DataFrame): Channel status 
-            steps : list
-                List of the applied processing steps       
+        data : np.ndarray (n_channels x n_samples)
+            Pre-prcessed time series data 
+        metadata : dict
+            Dictonary of process metadata 
+            - fsamp (float): Sampling rate in Hz
+            - ch_mask (np.ndarray): Boolean channel selection mask
+            - sample_mask (np.ndarray): Boolean sample selection mask
+            - ch_status (pd.DataFrame): Channel status 
+        steps : list
+            List of the applied processing steps       
         
         """
 
@@ -497,6 +859,10 @@ class PreProcessEMG:
                     ch_status.loc[
                         ~local_mask, "status_description"
                     ] = step.description
+                elif isinstance(step, self.MaskSamples):
+                    local_mask = np.ones(data.shape[1], dtype=bool)
+                    local_mask[step.sample_list] = False
+                    sample_mask = sample_mask & local_mask
                 elif isinstance(step, self.BadChannelDetection):
                     if step.window is not None:
                         idx0 = int(step.window[0] * fsamp_new)
@@ -531,7 +897,8 @@ class PreProcessEMG:
                         t_end = (n_samples - 1) / fsamp
                     else:
                         t_end = step.t_end
-                    sample_mask = (t >= step.t_start) & (t <= t_end)
+                    local_mask = (t >= step.t_start) & (t <= t_end)
+                    sample_mask = sample_mask & local_mask
                     t_start = step.t_start
                 elif isinstance(step, self.GetMetric):
                     if step.window is not None:
@@ -560,6 +927,19 @@ class PreProcessEMG:
                             fsamp=fsamp_new,
                             method="sparse"
                         )    
+
+                elif isinstance(step, self.ArtifactRejection):
+                    for i in range(len(step.artifact_times)):
+                        start_idx = int(
+                            (step.artifact_times[i] - step.before) * fsamp
+                        )
+                        start_idx = max(0, start_idx)
+                        end_idx = int(
+                            (step.artifact_times[i] + step.after) * fsamp
+                        )
+                        end_idx = min(end_idx, data.shape[1])
+                        sample_mask[:, start_idx:end_idx] = False
+
                 else:
                     raise ValueError(
                         "Invalid step type"
